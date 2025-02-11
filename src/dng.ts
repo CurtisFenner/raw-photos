@@ -269,7 +269,53 @@ export const DNG_TAGS = {
 		type: "U8",
 		count: 16,
 	},
-
+	50719: {
+		name: "DefaultCropOrigin",
+		type: ["U16", "U32", "Rational"],
+		count: 2,
+		// [DefaultCropOriginH, DefaultCropOriginV]
+		// default: [0, 0]
+	},
+	50720: {
+		name: "DefaultCropSize",
+		type: ["U16", "U32", "Rational"],
+		count: 2,
+		// value: [DefaultCropSizeH, DefaultCropSizeV]
+		// default: [ImageWidth, ImageLength]
+	},
+	50733: {
+		name: "BayerGreenSplit",
+		type: "U32",
+		count: 1,
+		// default: 0
+	},
+	50738: {
+		name: "AntiAliasStrength",
+		type: "Rational",
+		// default: 1.0
+	},
+	50829: {
+		name: "ActiveArea",
+		type: ["U16", "U32"],
+		count: 4,
+		// default: [0, 0, ImageLength, ImageWidth]
+	},
+	51009: {
+		name: "OpcodeList2",
+		type: "Undefined",
+		// default: []
+	},
+	51022: {
+		name: "OpcodeList3",
+		type: "Undefined",
+		// default: []
+	},
+	52525: {
+		// Added in 1.6.0.0
+		name: "ProfileGainTableMap",
+		type: "Undefined",
+		// count: Byte count of data
+	},
 	// From TIFF-EP section 5.2.5
 	330: {
 		name: "SubIFDs",
@@ -284,5 +330,18 @@ export const DNG_TAGS = {
 		type: "U32",
 		count: 1,
 		// Offset to GPSInfo IFD
+	},
+	// From TIFF-EP section 5.2.17
+	33421: {
+		name: "CFARepeatPatternDim",
+		type: "U16",
+		count: 2,
+		// value: [CFARepeatRows, CFARepeatCols]
+	},
+	// TIFF-EP 5.2.18
+	33422: {
+		name: "CFAPattern",
+		type: "U8",
+		// count: CFARepeatRows * CFARepeatCols
 	},
 } as const;

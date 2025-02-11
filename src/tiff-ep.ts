@@ -1,3 +1,5 @@
+import { DNG_TAGS } from "./dng.js";
+
 export class ScannerError extends Error {
 	constructor(public errorMessage: string) {
 		super(errorMessage);
@@ -157,6 +159,8 @@ export type ImageFileDirectory = {
 	entryCount: U16,
 	entries: IFDEntry[],
 	nextDirectory: U32,
+	myOffset: U32,
+	parentOffset: U32,
 };
 
 export type FieldType = U16;
@@ -208,7 +212,9 @@ export function scanIFDEntry(scanner: Scanner): IFDEntry {
 	};
 }
 
-export function scanIFD(scanner: Scanner): ImageFileDirectory {
+export function scanIFD(scanner: Scanner, parentOffset: U32): ImageFileDirectory {
+	const myOffset = scanner.offset;
+
 	const entryCount = scanner.u16();
 	const entries = [];
 	for (let i = 0; i < entryCount; i++) {
@@ -221,6 +227,8 @@ export function scanIFD(scanner: Scanner): ImageFileDirectory {
 		entryCount,
 		entries,
 		nextDirectory,
+		myOffset,
+		parentOffset,
 	};
 }
 
@@ -289,6 +297,13 @@ export function readReals(
 	return out;
 }
 
+export function readImageSegments(
+	scanner: Scanner,
+	ifd: ImageFileDirectory,
+) {
+
+}
+
 export function parseTIFF_EP(
 	file: Uint8Array,
 	options?: {
@@ -327,16 +342,43 @@ export function parseTIFF_EP(
 		);
 	}
 
-	let nextIFDOffset = scanner.u32();
+	const unparsedIFDs = [{ childOffset: scanner.u32(), parentOffset: 0 }];
 
 	const ifds = [];
-	while (nextIFDOffset !== 0 && ifds.length < 10_000) {
-		scanner.offset = nextIFDOffset;
-		const imageFileDirectory = scanIFD(scanner);
+	for (let k = 0; k < unparsedIFDs.length && ifds.length < 10_000; k++) {
+		const { childOffset, parentOffset } = unparsedIFDs[k];
+		if (childOffset === 0) {
+			continue;
+		}
+
+		scanner.offset = childOffset;
+		const imageFileDirectory = scanIFD(scanner, parentOffset);
 		ifds.push(imageFileDirectory);
 
-		nextIFDOffset = imageFileDirectory.nextDirectory;
+		for (const entry of imageFileDirectory.entries) {
+			const info = DNG_TAGS[entry.tag as keyof typeof DNG_TAGS];
+			if (info && info.name === "SubIFDs") {
+				const subIFDOffsets = readInts(scanner, entry);
+				if (!subIFDOffsets) {
+					problems.push(`invalid SubIFDs entry in IFD at ${childOffset}`);
+				} else {
+					for (const offset of subIFDOffsets) {
+						unparsedIFDs.push({
+							childOffset: offset,
+							parentOffset: childOffset,
+						});
+					}
+				}
+			}
+		}
+
+		unparsedIFDs.push({
+			childOffset: imageFileDirectory.nextDirectory,
+			parentOffset,
+		});
+
 	}
+
 	if (ifds.length > 9_000) {
 		problems.push("too many IFDs!");
 	}

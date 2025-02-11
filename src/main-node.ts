@@ -9,9 +9,11 @@ const out = parseTIFF_EP(dng);
 console.log("problems:", out.problems);
 console.log("#ifds:", out.ifds.length);
 for (let i = 0; i < out.ifds.length; i++) {
-	console.log(`ifd ${i}:`);
 	const ifd = out.ifds[i];
-	console.log(`\t#entries: ${ifd.entries.length}`);
+	console.log(`-- ifd ${i} (${ifd.myOffset} <- ${ifd.parentOffset}): `.padEnd(120, "-"));
+	if (ifd.entries.length === 0) {
+		console.log(`\t<no entries>`);
+	}
 	for (let k = 0; k < ifd.entries.length; k++) {
 		const entry = ifd.entries[k];
 		const info = FIELD_TYPES[entry.fieldType as keyof typeof FIELD_TYPES];

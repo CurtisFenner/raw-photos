@@ -76,6 +76,27 @@ export const TIFF6_TAGS = {
 		type: "ASCII",
 		count: 20,
 	},
+	322: {
+		name: "TileWidth",
+		type: ["U16", "U32"],
+		count: 1,
+	},
+	323: {
+		name: "TileLength",
+		type: ["U16", "U32"],
+		count: 1,
+	},
+	324: {
+		name: "TileOffsets",
+		type: "U32",
+		// count: TilesPerImage when PlanarConfiguration = 1
+		// count: SamplesPerPixel * TilesPerImage for PlanarConfiguration = 2
+	},
+	325: {
+		name: "TileByteCounts",
+		type: ["U16", "U32"],
+		// count: TileOffsets.count
+	},
 	529: {
 		name: "YCbCrCoefficients",
 		type: "Rational",
