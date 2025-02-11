@@ -345,3 +345,11 @@ export const DNG_TAGS = {
 		// count: CFARepeatRows * CFARepeatCols
 	},
 } as const;
+
+export const DNG_TAG_VALUES = Object.fromEntries(
+	Object.entries(DNG_TAGS).map(([key, value]) => {
+		return [value.name, parseInt(key)];
+	})
+) as any as {
+		[K in keyof typeof DNG_TAGS as (typeof DNG_TAGS)[K]["name"]]: K
+	};

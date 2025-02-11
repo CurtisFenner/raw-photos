@@ -118,3 +118,11 @@ export const TIFF6_TAGS = {
 		type: "Rational",
 	},
 } as const;
+
+export const TIFF6_TAG_VALUES = Object.fromEntries(
+	Object.entries(TIFF6_TAGS).map(([key, value]) => {
+		return [value.name, parseInt(key)];
+	})
+) as any as {
+		[K in keyof typeof TIFF6_TAGS as (typeof TIFF6_TAGS)[K]["name"]]: K
+	};

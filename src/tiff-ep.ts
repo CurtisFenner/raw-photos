@@ -1,4 +1,4 @@
-import { DNG_TAGS } from "./dng.js";
+import { DNG_TAG_VALUES } from "./dng.js";
 
 export class ScannerError extends Error {
 	constructor(public errorMessage: string) {
@@ -304,6 +304,15 @@ export function readImageSegments(
 
 }
 
+export function readTag<T>(ifd: ImageFileDirectory, tag: number, scanner: Scanner, f: (scanner: Scanner, entry: IFDEntry) => T): T | undefined {
+	const entry = ifd.entries.find(x => x.tag === tag);
+	if (!entry) {
+		return;
+	}
+
+	return f(scanner, entry);
+}
+
 export function parseTIFF_EP(
 	file: Uint8Array,
 	options?: {
@@ -355,20 +364,13 @@ export function parseTIFF_EP(
 		const imageFileDirectory = scanIFD(scanner, parentOffset);
 		ifds.push(imageFileDirectory);
 
-		for (const entry of imageFileDirectory.entries) {
-			const info = DNG_TAGS[entry.tag as keyof typeof DNG_TAGS];
-			if (info && info.name === "SubIFDs") {
-				const subIFDOffsets = readInts(scanner, entry);
-				if (!subIFDOffsets) {
-					problems.push(`invalid SubIFDs entry in IFD at ${childOffset}`);
-				} else {
-					for (const offset of subIFDOffsets) {
-						unparsedIFDs.push({
-							childOffset: offset,
-							parentOffset: childOffset,
-						});
-					}
-				}
+		const subIFDOffsets = readTag(imageFileDirectory, DNG_TAG_VALUES.SubIFDs, scanner, readInts);
+		if (subIFDOffsets) {
+			for (const offset of subIFDOffsets) {
+				unparsedIFDs.push({
+					childOffset: offset,
+					parentOffset: childOffset,
+				});
 			}
 		}
 
