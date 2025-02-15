@@ -1,4 +1,4 @@
-import { decodeJPEG } from "./jpeg.js";
+import * as jpeg from "./jpeg.js";
 import * as tiffEp from "./tiff-ep.js";
 import * as tiff6 from "./tiff6.js";
 
@@ -29,13 +29,16 @@ div.style.background = "lime";
 
 for (const segment of tiffEp.readImageSegments(tiff.scanner, rawIFD)) {
 	const slice = tiff.scanner.getSlice(segment);
-	const jpeg = decodeJPEG(slice);
+	const jpegData = jpeg.decodeJPEG(slice);
+
+	const dataByComponent = jpegData.differences
+		.map(x => jpeg.applyLosslessPredictor(jpegData.sosHeader, x));
+
 	const jpegComponentsSequential = [];
-	for (let y = 0; y < jpeg.sof3Header.lines; y++) {
-		for (let x = 0; x < jpeg.sof3Header.samplesPerLine; x++) {
-			for (let k = 0; k < jpeg.differences.length; k++) {
-				const component = jpeg.differences[k];
-				const n = component.diffRows[y][x];
+	for (let y = 0; y < jpegData.sof3Header.lines; y++) {
+		for (let x = 0; x < jpegData.sof3Header.samplesPerLine; x++) {
+			for (let k = 0; k < jpegData.differences.length; k++) {
+				const n = dataByComponent[k][y][x];
 				jpegComponentsSequential.push(n);
 			}
 		}
@@ -63,9 +66,9 @@ for (const segment of tiffEp.readImageSegments(tiff.scanner, rawIFD)) {
 		const y = Math.floor(i / segmentWidth);
 		const x = i % segmentWidth;
 		const data = jpegComponentsSequential[i];
-		const p = Math.max(0, Math.min(1, data / (2 ** 8) + 0.5));
-		const s = (p * 100).toFixed(0) + "%";
-		const color = `rgb(${s}  ${s}  ${s} / 50%)`;
+		const p = Math.max(0, Math.min(1, data / (2 ** 16)));
+		const s = (Math.pow(p, 0.25) * 100).toFixed(0) + "%";
+		const color = `rgb(${s}  ${s}  ${s})`;
 
 		ctx.fillStyle = color;
 		ctx.fillRect(x, y, 1, 1);

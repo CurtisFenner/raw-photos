@@ -286,7 +286,7 @@ export function decodeSOF3HuffmanCodedScanDifferences(
 		id: number;
 	}[],
 	unstuffedData: Uint8Array,
-) {
+): { id: number, diffRows: number[][], dx: number, dy: number }[] {
 	const components: {
 		id: number,
 		diffRows: number[][],
@@ -352,6 +352,39 @@ export function decodeSOF3HuffmanCodedScanDifferences(
 		}
 	}
 	return components;
+}
+
+export function applyLosslessPredictor(
+	sosHeader: SOSHeader,
+	{ diffRows }: { diffRows: number[][] },
+): number[][] {
+	console.log("predictor:", sosHeader.predictor);
+	console.log("pointTransform:", sosHeader.pointTransform);
+	const out: number[][] = [];
+
+	for (let y = 0; y < diffRows.length; y++) {
+		out[y] = [];
+		let left = y === 0
+			// On the first row, uses 2**(P-1).
+			? 2 ** (15 - sosHeader.pointTransform)
+			// On subsequent rows, uses the pixel above
+			: out[y - 1][0];
+		for (let x = 0; x < diffRows[y].length; x++) {
+			// (assume sosHeader.predictor === 1)
+			let prediction = left;
+			if (y !== 0 && sosHeader.predictor !== 1) {
+				if (sosHeader.predictor === 2) {
+					prediction = out[y - 1][x];
+				}
+				// TODO: Other predictions
+			}
+
+			const actual = (prediction + diffRows[y][x]) & ((1 << 16) - 1);
+			left = (out[y][x] = actual);
+		}
+	}
+
+	return out;
 }
 
 function length16PrefixedSlice(scanner: Scanner): Uint8Array {
@@ -459,6 +492,7 @@ export function decodeJPEG(jpeg: Uint8Array) {
 	return {
 		differences,
 		sof3Header,
+		sosHeader,
 	};
 
 	// {
