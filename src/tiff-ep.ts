@@ -186,8 +186,8 @@ export function readImageSegments(
 		const tilesAcross = Math.floor((imageWidth + tileWidth[0] - 1) / tileWidth[0]);
 		const tilesDown = Math.floor((imageLength + tileLength[0] - 1) / tileLength[0]);
 		let i = 0;
-		for (let u = 0; u < tilesAcross; u++) {
-			for (let v = 0; v < tilesDown; v++) {
+		for (let v = 0; v < tilesDown; v++) {
+			for (let u = 0; u < tilesAcross; u++) {
 				tiles.push({
 					x0: u * tileWidth[0],
 					x1: (u + 1) * tileWidth[0],
