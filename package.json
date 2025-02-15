@@ -1,5 +1,8 @@
 {
 	"type": "module",
+	"scripts": {
+		"go": "node --enable-source-maps dist/main-node.js"
+	},
 	"dependencies": {
 		"@types/node": "^22.13.1"
 	}

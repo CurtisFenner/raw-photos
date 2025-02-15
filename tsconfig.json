@@ -4,6 +4,7 @@
 		"outDir": "dist",
 		"target": "ESNext",
 		"module": "NodeNext",
-		"moduleResolution": "nodenext"
+		"moduleResolution": "nodenext",
+		"sourceMap": true
 	}
 }
