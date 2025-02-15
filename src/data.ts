@@ -1,3 +1,5 @@
+import { assert } from "./test.js";
+
 export class ScannerError extends Error {
 	constructor(public errorMessage: string) {
 		super(errorMessage);
@@ -166,10 +168,17 @@ export class BitStream {
 	constructor(private bytes: Uint8Array) {
 	}
 
+	private byte(n: number): U8 {
+		if (n >= this.bytes.length) {
+			const paddingByte = this.paddingBit === 0
+				? 0
+				: 0b1111_1111;
+			return paddingByte;
+		}
+		return this.bytes[n];
+	}
+
 	peek16BigEndian(): U16 {
-		const paddingByte = this.paddingBit === 0
-			? 0
-			: 0b1111_1111;
 
 		//   v: offsetBitsInByte=0
 		// [ aaaa aaaa bbbb bbbb cccc cccc ]
@@ -178,9 +187,9 @@ export class BitStream {
 		//         v: offsetBitsInByte=5
 		// [ aaaa aaaa bbbb bbbb cccc cccc ]
 		//   ---- -111 1111 1222 2222 2--- (shift right 3)
-		const bytes = ((this.bytes[this.offsetBytes] || paddingByte) << 16)
-			| ((this.bytes[this.offsetBytes] || paddingByte) << 8)
-			| ((this.bytes[this.offsetBytes] || paddingByte) << 0);
+		const bytes = (this.byte(this.offsetBytes) << 16)
+			| (this.byte(this.offsetBytes + 1) << 8)
+			| (this.byte(this.offsetBytes + 2) << 0);
 
 		return (bytes >> (8 - this.offsetBitsInByte)) & 0b1111_1111_1111_1111;
 	}
@@ -193,4 +202,29 @@ export class BitStream {
 		this.offsetBytes += (this.offsetBitsInByte >> 3);
 		this.offsetBitsInByte = this.offsetBitsInByte & 0b111;
 	}
+}
+
+{
+	const stream = new BitStream(new Uint8Array([
+		/* 0 */ 0b1011_0000,
+		/* 8 */ 0b0101_1011,
+		/* 16 */ 0b1111_1111,
+		/* 24 */ 0b0010_0000,
+		/* 32 */ 0b0000_0000,
+		/* 40: 0b1111_1111 */
+	]));
+	assert(stream.peek16BigEndian(), "is equal to", 0b1011_0000_0101_1011);
+	stream.advanceBits(1);
+	assert(stream.peek16BigEndian(), "is equal to", 0b011_0000_0101_1011_1);
+	stream.advanceBits(3);
+	assert(stream.peek16BigEndian(), "is equal to", 0b0000_0101_1011_1111);
+	stream.advanceBits(4);
+	assert(stream.peek16BigEndian(), "is equal to", 0b0101_1011_1111_1111);
+	stream.advanceBits(19);
+	// at 27
+	assert(stream.peek16BigEndian(), "is equal to", 0b0_0000_0000_0000_111);
+	stream.advanceBits(1);
+	assert(stream.peek16BigEndian(), "is equal to", 0b0000_0000_0000_1111);
+	stream.advanceBits(1);
+	assert(stream.peek16BigEndian(), "is equal to", 0b000_0000_0000_1111_1);
 }
