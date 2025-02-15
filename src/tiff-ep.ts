@@ -1,4 +1,5 @@
 import { DNG_TAG_VALUES } from "./dng.js";
+import { TIFF6_TAG_VALUES } from "./tiff6.js";
 
 export class ScannerError extends Error {
 	constructor(public errorMessage: string) {
@@ -22,6 +23,10 @@ export class Scanner {
 		public byteOrder?: undefined | "big-endian" | "little-endian",
 	) {
 		this.dataView = new DataView(data.buffer);
+	}
+
+	getSlice(slice: { offset: number, byteCount: number }) {
+		return new Uint8Array(this.dataView.buffer, slice.offset, slice.byteCount);
 	}
 
 	u8(): U8 {
@@ -301,7 +306,63 @@ export function readImageSegments(
 	scanner: Scanner,
 	ifd: ImageFileDirectory,
 ) {
+	const imageWidth = readTag(ifd, TIFF6_TAG_VALUES.ImageWidth, scanner, readInts)![0];
+	const imageLength = readTag(ifd, TIFF6_TAG_VALUES.ImageLength, scanner, readInts)![0];
 
+	const rowsPerStrip = readTag(ifd, TIFF6_TAG_VALUES.RowsPerStrip, scanner, readInts);
+	if (rowsPerStrip && rowsPerStrip.length === 1) {
+		const stripOffsets = readTag(ifd, TIFF6_TAG_VALUES.StripOffsets, scanner, readInts);
+		const stripByteCounts = readTag(ifd, TIFF6_TAG_VALUES.StripByteCounts, scanner, readInts);
+		if (!stripOffsets || !stripByteCounts || stripOffsets.length !== stripByteCounts.length) {
+			throw new ScannerError("invalid StripOffsets / StripByteCounts");
+		}
+
+		const segments = [];
+		for (let i = 0; i < stripOffsets.length; i++) {
+			segments.push({
+				x0: 0,
+				x1: imageWidth,
+				y0: i * rowsPerStrip[0],
+				y1: Math.min((i + 1) * rowsPerStrip[0], imageLength),
+				offset: stripOffsets[i],
+				byteCount: stripByteCounts[i],
+			});
+		}
+		return segments;
+	}
+
+	const tileWidth = readTag(ifd, TIFF6_TAG_VALUES.TileWidth, scanner, readInts);
+	const tileLength = readTag(ifd, TIFF6_TAG_VALUES.TileLength, scanner, readInts);
+	if (tileWidth && tileWidth.length === 1 && tileLength && tileLength.length === 1) {
+		const tileOffsets = readTag(ifd, TIFF6_TAG_VALUES.TileOffsets, scanner, readInts);
+		const tileByteCounts = readTag(ifd, TIFF6_TAG_VALUES.TileByteCounts, scanner, readInts);
+		if (!tileOffsets || !tileByteCounts || tileOffsets.length !== tileByteCounts.length) {
+			throw new ScannerError("invalid TileOffsets / TileByteCounts");
+		}
+
+		const tiles = [];
+		const tilesAcross = Math.floor((imageWidth + tileWidth[0] - 1) / tileWidth[0]);
+		const tilesDown = Math.floor((imageLength + tileLength[0] - 1) / tileLength[0]);
+		let i = 0;
+		for (let u = 0; u < tilesAcross; u++) {
+			for (let v = 0; v < tilesDown; v++) {
+				tiles.push({
+					x0: u * tileWidth[0],
+					x1: (u + 1) * tileWidth[0],
+					y0: v * tileLength[0],
+					y1: (v + 1) * tileLength[0],
+					offset: tileOffsets[i],
+					byteCount: tileByteCounts[i],
+					tileWidth,
+					tileLength,
+				});
+				i++;
+			}
+		}
+		return tiles;
+	}
+
+	throw new Error("missing RowsPerStrip / TileWidth / TileLength");
 }
 
 export function readTag<T>(ifd: ImageFileDirectory, tag: number, scanner: Scanner, f: (scanner: Scanner, entry: IFDEntry) => T): T | undefined {
