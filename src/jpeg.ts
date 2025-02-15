@@ -5,6 +5,8 @@
 // Scan := TablesAndMisc ScanHeader ECS0 RST0 ... ECS_n-1 RST_n-1 ECS_n
 // ECS := MCU*
 
+import { BitStream, U16 } from "./data.js";
+
 // FrameHeader :=
 // SOF0 | SOF1 | SOF2 | SOF3 | SOF9 | SOF10 | SOF11
 // Lf
@@ -45,45 +47,6 @@ export function unstuffBytes(bytes: Uint8Array): Uint8Array {
 		write += 1;
 	}
 	return out;
-}
-
-export type U16 = number;
-
-export class BitStream {
-	offsetBytes = 0;
-	offsetBitsInByte = 0;
-	paddingBit: 0 | 1 = 1;
-
-	constructor(private bytes: Uint8Array) {
-	}
-
-	peek16BigEndian(): U16 {
-		const paddingByte = this.paddingBit === 0
-			? 0
-			: 0b1111_1111;
-
-		//   v: offsetBitsInByte=0
-		// [ aaaa aaaa bbbb bbbb cccc cccc ]
-		//   1111 1111 2222 2222 ---- ---- (shift right 8)
-
-		//         v: offsetBitsInByte=5
-		// [ aaaa aaaa bbbb bbbb cccc cccc ]
-		//   ---- -111 1111 1222 2222 2--- (shift right 3)
-		const bytes = ((this.bytes[this.offsetBytes] || paddingByte) << 16)
-			| ((this.bytes[this.offsetBytes] || paddingByte) << 8)
-			| ((this.bytes[this.offsetBytes] || paddingByte) << 0);
-
-		return (bytes >> (8 - this.offsetBitsInByte)) & 0b1111_1111_1111_1111;
-	}
-
-	advanceBits(bits: number): void {
-		if (bits < 0) {
-			throw new Error("advanceBits: bits must be non-negative");
-		}
-		this.offsetBitsInByte += bits;
-		this.offsetBytes += (this.offsetBitsInByte >> 3);
-		this.offsetBitsInByte = this.offsetBitsInByte & 0b111;
-	}
 }
 
 export class HuffmanTable<T> {
