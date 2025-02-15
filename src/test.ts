@@ -1,4 +1,24 @@
-import * as util from "node:util";
+import type * as utilType from "node:util";
+
+const util: typeof utilType = await (async function () {
+	try {
+		if (typeof window !== "undefined") {
+			throw new Error("not node");
+		}
+		return await import("node:util");
+	} catch (e) {
+		const utilInspect: {
+			readonly custom: unique symbol,
+		} & ((a: any, b?: any) => string) = function (a: any, b?: any) {
+			return String(a);
+		} as any;
+
+		(utilInspect as any).custom = Symbol("util.inspect.custom");
+		return {
+			inspect: utilInspect,
+		} as any as typeof utilType;
+	}
+})();
 
 export const spec = Symbol("test-spec");
 

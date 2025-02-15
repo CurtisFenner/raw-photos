@@ -2,7 +2,6 @@ import { U16, U32, Scanner, ScannerError } from "./data.js";
 import { DNG_TAG_VALUES } from "./dng.js";
 import { TIFF6_TAG_VALUES } from "./tiff6.js";
 
-
 export type ImageFileDirectory = {
 	entryCount: U16,
 	entries: IFDEntry[],

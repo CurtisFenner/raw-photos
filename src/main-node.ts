@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import { FIELD_TYPES, parseTIFF_EP, readASCII, readImageSegments, readInts, readReals, readTag } from "./tiff-ep.js";
 import { DNG_TAGS } from "./dng.js";
 import { TIFF6_TAG_VALUES, TIFF6_TAGS } from "./tiff6.js";
-import { decodeJpeg } from "./jpeg.js";
+import { decodeJPEG } from "./jpeg.js";
 
 const dng = fs.readFileSync("vending.dng");
 
@@ -65,5 +65,6 @@ for (const segment of readImageSegments(out.scanner, rawIfd)) {
 	const slice = out.scanner.getSlice(segment);
 	console.log("-".repeat(80));
 	console.log(segment);
-	const markers = decodeJpeg(slice);
+	console.log(slice);
+	const markers = decodeJPEG(slice);
 }

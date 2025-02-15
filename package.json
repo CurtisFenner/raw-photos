@@ -1,7 +1,8 @@
 {
 	"type": "module",
 	"scripts": {
-		"go": "node --enable-source-maps dist/main-node.js"
+		"go": "node --enable-source-maps dist/main-node.js",
+		"serve": "npx http-server"
 	},
 	"dependencies": {
 		"@types/node": "^22.13.1"

@@ -21,7 +21,8 @@ export class Scanner {
 		data: Uint8Array,
 		public byteOrder?: undefined | "big-endian" | "little-endian",
 	) {
-		this.dataView = new DataView(data.buffer);
+		const cloned = new Uint8Array([...data]);
+		this.dataView = new DataView(cloned.buffer);
 	}
 
 	getSlice(slice: { offset: number, byteCount: number }) {
@@ -179,7 +180,6 @@ export class BitStream {
 	}
 
 	peek16BigEndian(): U16 {
-
 		//   v: offsetBitsInByte=0
 		// [ aaaa aaaa bbbb bbbb cccc cccc ]
 		//   1111 1111 2222 2222 ---- ---- (shift right 8)
