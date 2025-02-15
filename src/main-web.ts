@@ -67,7 +67,7 @@ for (const segment of tiffEp.readImageSegments(tiff.scanner, rawIFD)) {
 		const x = i % segmentWidth;
 		const data = jpegComponentsSequential[i];
 		const p = Math.max(0, Math.min(1, data / (2 ** 16)));
-		const s = (Math.pow(p, 0.25) * 100).toFixed(0) + "%";
+		const s = (Math.pow(p * 4, 0.5) * 100).toFixed(0) + "%";
 		const color = `rgb(${s}  ${s}  ${s})`;
 
 		ctx.fillStyle = color;
