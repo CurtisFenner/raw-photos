@@ -32,7 +32,7 @@ for (const segment of tiffEp.readImageSegments(tiff.scanner, rawIFD)) {
 	const jpegData = jpeg.decodeJPEG(slice);
 
 	const dataByComponent = jpegData.differences
-		.map(x => jpeg.applyLosslessPredictor(jpegData.sosHeader, x));
+		.map(x => jpeg.applyLosslessPredictor(jpegData.sof3Header, jpegData.sosHeader, x));
 
 	const jpegComponentsSequential = [];
 	for (let y = 0; y < jpegData.sof3Header.lines; y++) {
@@ -59,6 +59,7 @@ for (const segment of tiffEp.readImageSegments(tiff.scanner, rawIFD)) {
 	canvas.style.left = segment.x0 + "px";
 	canvas.style.top = segment.y0 + "px";
 	canvas.style.background = "#" + Math.random().toString(16).substring(2, 8);
+	canvas.style.imageRendering = "pixelated";
 	const ctx = canvas.getContext("2d")!;
 
 	// Draw difference data.

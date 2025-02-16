@@ -48,6 +48,7 @@ export type SOF3Header = {
 	samplesPerLine: number,
 	components: {
 		id: number,
+		precision: number,
 		/** The details of MCU and different sample precision is,
 		 * according to a remark under Figure 13 in 4.8.1,
 		 * described in Annex A.
@@ -100,6 +101,7 @@ export function decodeSof3FrameHeader(bytes: Uint8Array): SOF3Header {
 		}
 		components.push({
 			id: componentID,
+			precision,
 			/** The details of MCU and different sample precision is,
 			 * according to a remark under Figure 13 in 4.8.1,
 			 * described in Annex A.
@@ -118,6 +120,9 @@ export function decodeSof3FrameHeader(bytes: Uint8Array): SOF3Header {
 	};
 }
 
+/**
+ * See B.2.4.2
+ */
 export function decodeLosslessDHT(dht: Uint8Array): { table: HuffmanTable<U8>, id: number } {
 	const scanner = new Scanner(dht, "big-endian");
 	const length = scanner.u16();
@@ -355,18 +360,21 @@ export function decodeSOF3HuffmanCodedScanDifferences(
 }
 
 export function applyLosslessPredictor(
+	sof3Header: SOF3Header,
 	sosHeader: SOSHeader,
-	{ diffRows }: { diffRows: number[][] },
+	{ id, diffRows }: { id: number, diffRows: number[][] },
 ): number[][] {
-	console.log("predictor:", sosHeader.predictor);
-	console.log("pointTransform:", sosHeader.pointTransform);
 	const out: number[][] = [];
+	const component = sof3Header.components.find(x => x.id === id);
+	if (!component) {
+		throw new JPEGError(`applyLosslessPredictor: undefined component ${id}`);
+	}
 
 	for (let y = 0; y < diffRows.length; y++) {
 		out[y] = [];
 		let left = y === 0
 			// On the first row, uses 2**(P-1).
-			? 2 ** (15 - sosHeader.pointTransform)
+			? 2 ** (component.precision - sosHeader.pointTransform - 1)
 			// On subsequent rows, uses the pixel above
 			: out[y - 1][0];
 		for (let x = 0; x < diffRows[y].length; x++) {
