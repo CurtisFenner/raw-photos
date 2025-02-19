@@ -1,5 +1,4 @@
 import { U16, U32, Scanner, ScannerError } from "./data.js";
-import { DNG_TAG_VALUES } from "./dng.js";
 import { TIFF6_TAG_VALUES } from "./tiff6.js";
 
 export type ImageFileDirectory = {
@@ -8,6 +7,8 @@ export type ImageFileDirectory = {
 	nextDirectory: U32,
 	myOffset: U32,
 	parentOffset: U32,
+
+	scanner: Scanner,
 };
 
 export type FieldType = U16;
@@ -38,6 +39,24 @@ export const FIELD_INT_TYPES = {
 	8: { name: "I16", bytes: 2, int: true },
 	9: { name: "I32", bytes: 4, int: true },
 } as const;
+
+export const TIFF_EP_TAGS = {
+	// From TIFF-EP section 5.2.5
+	330: {
+		name: "SubIFDs",
+		type: "U32",
+		// count: number of child IFDs
+		// If n = 1, the offset is the offset of the child IFD.
+		// If n > 1, the offset is to an array of U32s.
+	},
+};
+export const TIFF_EP_TAG_VALUES = Object.fromEntries(
+	Object.entries(TIFF_EP_TAGS).map(([key, value]) => {
+		return [value.name, parseInt(key)];
+	})
+) as any as {
+		[K in keyof typeof TIFF_EP_TAGS as (typeof TIFF_EP_TAGS)[K]["name"]]: K
+	};
 
 export const FIELD_TYPES: Record<number, (typeof FIELD_INT_TYPES & typeof FIELD_OTHER_TYPES)[keyof typeof FIELD_INT_TYPES | keyof typeof FIELD_OTHER_TYPES]> = {
 	...FIELD_INT_TYPES,
@@ -76,6 +95,7 @@ export function scanIFD(scanner: Scanner, parentOffset: U32): ImageFileDirectory
 		nextDirectory,
 		myOffset,
 		parentOffset,
+		scanner,
 	};
 }
 
@@ -128,6 +148,9 @@ export function readReals(
 ): number[] | undefined {
 	const fieldInfo = FIELD_TYPES[entry.fieldType];
 	if (!fieldInfo || !("real" in fieldInfo) || !fieldInfo.real) {
+		if ("int" in fieldInfo && fieldInfo.int) {
+			return readInts(scanner, entry);
+		}
 		return;
 	}
 
@@ -145,16 +168,15 @@ export function readReals(
 }
 
 export function readImageSegments(
-	scanner: Scanner,
 	ifd: ImageFileDirectory,
 ) {
-	const imageWidth = readTag(ifd, TIFF6_TAG_VALUES.ImageWidth, scanner, readInts)![0];
-	const imageLength = readTag(ifd, TIFF6_TAG_VALUES.ImageLength, scanner, readInts)![0];
+	const imageWidth = readTag(ifd, TIFF6_TAG_VALUES.ImageWidth, readInts)![0];
+	const imageLength = readTag(ifd, TIFF6_TAG_VALUES.ImageLength, readInts)![0];
 
-	const rowsPerStrip = readTag(ifd, TIFF6_TAG_VALUES.RowsPerStrip, scanner, readInts);
+	const rowsPerStrip = readTag(ifd, TIFF6_TAG_VALUES.RowsPerStrip, readInts);
 	if (rowsPerStrip && rowsPerStrip.length === 1) {
-		const stripOffsets = readTag(ifd, TIFF6_TAG_VALUES.StripOffsets, scanner, readInts);
-		const stripByteCounts = readTag(ifd, TIFF6_TAG_VALUES.StripByteCounts, scanner, readInts);
+		const stripOffsets = readTag(ifd, TIFF6_TAG_VALUES.StripOffsets, readInts);
+		const stripByteCounts = readTag(ifd, TIFF6_TAG_VALUES.StripByteCounts, readInts);
 		if (!stripOffsets || !stripByteCounts || stripOffsets.length !== stripByteCounts.length) {
 			throw new ScannerError("invalid StripOffsets / StripByteCounts");
 		}
@@ -173,11 +195,11 @@ export function readImageSegments(
 		return segments;
 	}
 
-	const tileWidth = readTag(ifd, TIFF6_TAG_VALUES.TileWidth, scanner, readInts);
-	const tileLength = readTag(ifd, TIFF6_TAG_VALUES.TileLength, scanner, readInts);
+	const tileWidth = readTag(ifd, TIFF6_TAG_VALUES.TileWidth, readInts);
+	const tileLength = readTag(ifd, TIFF6_TAG_VALUES.TileLength, readInts);
 	if (tileWidth && tileWidth.length === 1 && tileLength && tileLength.length === 1) {
-		const tileOffsets = readTag(ifd, TIFF6_TAG_VALUES.TileOffsets, scanner, readInts);
-		const tileByteCounts = readTag(ifd, TIFF6_TAG_VALUES.TileByteCounts, scanner, readInts);
+		const tileOffsets = readTag(ifd, TIFF6_TAG_VALUES.TileOffsets, readInts);
+		const tileByteCounts = readTag(ifd, TIFF6_TAG_VALUES.TileByteCounts, readInts);
 		if (!tileOffsets || !tileByteCounts || tileOffsets.length !== tileByteCounts.length) {
 			throw new ScannerError("invalid TileOffsets / TileByteCounts");
 		}
@@ -207,13 +229,17 @@ export function readImageSegments(
 	throw new Error("missing RowsPerStrip / TileWidth / TileLength");
 }
 
-export function readTag<T>(ifd: ImageFileDirectory, tag: number, scanner: Scanner, f: (scanner: Scanner, entry: IFDEntry) => T): T | undefined {
+export function readTag<T>(
+	ifd: ImageFileDirectory,
+	tag: number,
+	f: (scanner: Scanner, entry: IFDEntry) => T,
+): T | undefined {
 	const entry = ifd.entries.find(x => x.tag === tag);
 	if (!entry) {
 		return;
 	}
 
-	return f(scanner, entry);
+	return f(ifd.scanner, entry);
 }
 
 export function parseTIFF_EP(
@@ -267,7 +293,7 @@ export function parseTIFF_EP(
 		const imageFileDirectory = scanIFD(scanner, parentOffset);
 		ifds.push(imageFileDirectory);
 
-		const subIFDOffsets = readTag(imageFileDirectory, DNG_TAG_VALUES.SubIFDs, scanner, readInts);
+		const subIFDOffsets = readTag(imageFileDirectory, TIFF_EP_TAG_VALUES.SubIFDs, readInts);
 		if (subIFDOffsets) {
 			for (const offset of subIFDOffsets) {
 				unparsedIFDs.push({

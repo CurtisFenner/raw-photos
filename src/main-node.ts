@@ -57,11 +57,11 @@ for (let i = 0; i < out.ifds.length; i++) {
 }
 
 const rawIfd = out.ifds.findLast(x => {
-	const f = readTag(x, TIFF6_TAG_VALUES.NewSubfileType, out.scanner, readInts);
+	const f = readTag(x, TIFF6_TAG_VALUES.NewSubfileType, readInts);
 	return f && f[0] === 0;
 })!;
 
-for (const segment of readImageSegments(out.scanner, rawIfd)) {
+for (const segment of readImageSegments(rawIfd)) {
 	const slice = out.scanner.getSlice(segment);
 	console.log("-".repeat(80));
 	console.log(segment);
