@@ -358,21 +358,11 @@ export class DNGError extends Error {
 	}
 }
 
-function mod(a: number, b: number) {
-	if (a >= 0) {
-		return a % b;
-	}
-	return (a % b) + b;
-}
-
-/** From "Mapping Raw Values to Linear Reference Values" in DNG Spec 1.7.1.0 */
-export class Linearizer {
+class ActiveArea {
 	/** ImageLength */
 	readonly imageHeight: number;
 	/** ImageWidth */
 	readonly imageWidth: number;
-	/** SamplesPerPixel */
-	readonly componentCount: number;
 
 	/** ActiveArea[0] */
 	readonly activeAreaTop: number;
@@ -386,19 +376,63 @@ export class Linearizer {
 	readonly activeAreaWidth: number;
 	readonly activeAreaHeight: number;
 
+	constructor(private ifd: tiffEp.ImageFileDirectory) {
+		this.imageHeight = readRealsTagExpectingSize(ifd, "ImageLength", 1, { requires: isPositive })[0];
+		this.imageWidth = readRealsTagExpectingSize(ifd, "ImageWidth", 1, { requires: isPositive })[0];
+
+		const activeArea = tiffEp.readTag(ifd, DNG_TAG_VALUES.ActiveArea, tiffEp.readInts)
+			|| [0, 0, this.imageHeight, this.imageWidth];
+		if (activeArea.length !== 4) {
+			throw new DNGError("invalid ActiveArea");
+		}
+		this.activeAreaTop = activeArea[0];
+		this.activeAreaLeft = activeArea[1];
+		this.activeAreaBottom = activeArea[2];
+		this.activeAreaRight = activeArea[3];
+		this.activeAreaWidth = this.activeAreaRight - this.activeAreaLeft;
+		this.activeAreaHeight = this.activeAreaBottom - this.activeAreaTop;
+	}
+}
+
+class ActiveAreaPattern {
+	constructor(
+		public readonly activeArea: ActiveArea,
+		private pattern: number[][],
+	) { }
+
+	getPixel(row: number, column: number): number {
+		const u = mod(row - this.activeArea.activeAreaLeft, this.pattern.length);
+		const v = mod(row - this.activeArea.activeAreaTop, this.pattern[0].length);
+		return this.pattern[u][v];
+	}
+}
+
+function mod(a: number, b: number) {
+	if (a >= 0) {
+		return a % b;
+	}
+	return (a % b) + b;
+}
+
+/** From "Mapping Raw Values to Linear Reference Values" in DNG Spec 1.7.1.0 */
+export class Linearizer {
+	readonly activeArea: ActiveArea;
+	/** SamplesPerPixel */
+	readonly componentCount: number;
+
 	/** BitsPerSample */
 	readonly bitsPerSample: number;
 
 	/** BlackLevel [component][y - activeAreaTop][x - activeAreaLeft].
 	 * Dimensions from BlackLevelRepeatDim
 	 */
-	private blackLevelPatternByComponent: number[][][];
+	private blackLevelPatternByComponent: ActiveAreaPattern[];
 
 	/** BlackLevelDeltaH [x - activeAreaLeft] */
-	private blackLevelByColumn: number[];
+	private blackLevelByColumn: ActiveAreaPattern;
 
 	/** BlackLevelDeltaV [y - activeAreaTop] */
-	private blackLevelByRow: number[];
+	private blackLevelByRow: ActiveAreaPattern;
 
 	private maxBlackLevelByComponent: number[];
 
@@ -406,18 +440,14 @@ export class Linearizer {
 	private whiteLevelScalingByComponent: number[];
 
 	getBlackLevel(component: number, row: number, column: number): number {
-		const pRow = mod(row - this.activeAreaTop, this.blackLevelPatternByComponent[component].length);
-		const pColumn = mod(column - this.activeAreaLeft, this.blackLevelPatternByComponent[component][pRow].length);
-		const fromPattern = this.blackLevelPatternByComponent[component][pRow][pColumn];
-		const fromColumn = this.blackLevelByColumn[Math.max(0, Math.min(this.blackLevelByColumn.length - 1, column - this.activeAreaLeft))];
-		const fromRow = this.blackLevelByRow[Math.max(0, Math.min(this.blackLevelByRow.length - 1, row - this.activeAreaTop))];
+		const fromPattern = this.blackLevelPatternByComponent[component].getPixel(row, column);
+		const fromRow = this.blackLevelByRow.getPixel(row, column);
+		const fromColumn = this.blackLevelByColumn.getPixel(row, column);
 		return fromPattern + fromColumn + fromRow;
 	}
 
 	constructor(rawIFD: tiffEp.ImageFileDirectory) {
-		this.imageHeight = readRealsTagExpectingSize(rawIFD, "ImageLength", 1, { requires: isPositive })[0];
-		this.imageWidth = readRealsTagExpectingSize(rawIFD, "ImageWidth", 1, { requires: isPositive })[0];
-
+		this.activeArea = new ActiveArea(rawIFD);
 		this.componentCount = readRealsTagExpectingSize(rawIFD, "SamplesPerPixel", 1, { requires: isPositive })[0];
 
 		const bitsPerSample = tiffEp.readTag(rawIFD, TIFF6_TAG_VALUES.BitsPerSample, tiffEp.readInts);
@@ -426,44 +456,40 @@ export class Linearizer {
 		}
 		this.bitsPerSample = bitsPerSample[0];
 
-		const activeArea = tiffEp.readTag(rawIFD, DNG_TAG_VALUES.ActiveArea, tiffEp.readInts)
-			|| [0, 0, this.imageHeight, this.imageWidth];
-		if (activeArea.length !== 4) {
-			throw new DNGError("invalid activeArea");
-		}
-		this.activeAreaTop = activeArea[0];
-		this.activeAreaLeft = activeArea[1];
-		this.activeAreaBottom = activeArea[2];
-		this.activeAreaRight = activeArea[3];
-		this.activeAreaWidth = this.activeAreaRight - this.activeAreaLeft;
-		this.activeAreaHeight = this.activeAreaBottom - this.activeAreaTop;
+		const blackLevelRepeatDim = readRealsTagExpectingSize(
+			rawIFD,
+			"BlackLevelRepeatDim",
+			2,
+			{ default: 1, requires: isPositive },
+		) as [number, number];
 
-		const blackLevelRepeatDim = readRealsTagExpectingSize(rawIFD, "BlackLevelRepeatDim", 2, { default: 1, requires: isPositive });
-
-		const blackLevelPattern = readRealsTagExpectingSize(rawIFD, "BlackLevel", this.componentCount * blackLevelRepeatDim[0] * blackLevelRepeatDim[1], { default: 0 });
+		const blackLevelPatternByComponent = readRealRectangles<3>(
+			rawIFD,
+			"BlackLevel",
+			[blackLevelRepeatDim[0], blackLevelRepeatDim[1], this.componentCount],
+			{ default: 0 },
+		);
 
 		this.blackLevelPatternByComponent = [];
-		if (blackLevelPattern.length !== this.componentCount * blackLevelRepeatDim[0] * blackLevelRepeatDim[1]) {
-			throw new DNGError(
-				`invalid BlackLevel size ${blackLevelPattern.length}:` +
-				`\n\texpected ${this.componentCount} * ${blackLevelRepeatDim[0]} * ${blackLevelRepeatDim[1]}` +
-				` = ${this.componentCount * blackLevelRepeatDim[0] * blackLevelRepeatDim[1]}`,
-			);
-		}
-
 		for (let component = 0; component < this.componentCount; component++) {
-			this.blackLevelPatternByComponent[component] = [];
-			for (let r = 0; r < blackLevelRepeatDim[0]; r++) {
-				this.blackLevelPatternByComponent[component][r] = [];
-				for (let c = 0; c < blackLevelRepeatDim[1]; c++) {
-					const i = component + this.componentCount * (blackLevelRepeatDim[1] * r + c);
-					this.blackLevelPatternByComponent[component][r][c] = blackLevelPattern[i];
+			const pattern: number[][] = [];
+			for (let r = 0; r < blackLevelPatternByComponent.length; r++) {
+				pattern[r] = [];
+				for (let c = 0; c < blackLevelPatternByComponent[r].length; c++) {
+					pattern[r][c] = blackLevelPatternByComponent[r][c][component];
 				}
 			}
+			this.blackLevelPatternByComponent[component] = new ActiveAreaPattern(this.activeArea, pattern);
 		}
 
-		this.blackLevelByRow = readRealsTagExpectingSize(rawIFD, "BlackLevelDeltaV", this.activeAreaHeight, { default: 0 });
-		this.blackLevelByColumn = readRealsTagExpectingSize(rawIFD, "BlackLevelDeltaH", this.activeAreaWidth, { default: 0 });
+		this.blackLevelByRow = new ActiveAreaPattern(
+			this.activeArea,
+			readRealRectangles<2>(rawIFD, "BlackLevelDeltaV", [this.activeArea.activeAreaHeight, 1], { default: 0 })
+		);
+		this.blackLevelByColumn = new ActiveAreaPattern(
+			this.activeArea,
+			readRealRectangles<2>(rawIFD, "BlackLevelDeltaH", [1, this.activeArea.activeAreaWidth], { default: 0 })
+		);
 
 		this.whiteLevelByComponent = readRealsTagExpectingSize(rawIFD, "WhiteLevel", this.componentCount, {
 			default: 2 ** this.bitsPerSample - 1,
@@ -473,8 +499,8 @@ export class Linearizer {
 		this.maxBlackLevelByComponent = [];
 		this.whiteLevelScalingByComponent = [];
 		for (let component = 0; component < this.componentCount; component++) {
-			for (let row = this.activeAreaTop; row < this.activeAreaBottom; row++) {
-				for (let column = this.activeAreaLeft; column < this.activeAreaRight; column++) {
+			for (let row = this.activeArea.activeAreaTop; row < this.activeArea.activeAreaBottom; row++) {
+				for (let column = this.activeArea.activeAreaLeft; column < this.activeArea.activeAreaRight; column++) {
 					this.maxBlackLevelByComponent[component] = Math.max(
 						this.maxBlackLevelByComponent[component] ?? 0,
 						this.getBlackLevel(component, row, column),
@@ -608,4 +634,39 @@ function readRealsTagExpectingSize(
 		}
 	}
 	return reals;
+}
+
+function readRealRectangles<C extends number>(
+	ifd: tiffEp.ImageFileDirectory,
+	tagName: keyof typeof ALL_TAG_VALUES,
+	dimensions: C extends 2 ? [number, number] : [number, number, number],
+	options?: { default?: number; requires?: (v: I32) => boolean; },
+): C extends 2 ? number[][] : number[][][] {
+	if (dimensions.length === 2) {
+		const count = dimensions[0] * dimensions[1];
+		const reals = readRealsTagExpectingSize(ifd, tagName, count, options);
+		const out: number[][] = [];
+		for (let x = 0; x < dimensions[0]; x++) {
+			out[x] = [];
+			for (let y = 0; y < dimensions[1]; y++) {
+				out[x][y] = reals[x * dimensions[1] + y];
+			}
+		}
+		return (out as number[][]) as any;
+	} else {
+		const count = dimensions[0] * dimensions[1] * dimensions[2];
+		const reals = readRealsTagExpectingSize(ifd, tagName, count, options);
+		const out: number[][][] = [];
+		for (let x = 0; x < dimensions[0]; x++) {
+			out[x] = [];
+			for (let y = 0; y < dimensions[1]; y++) {
+				out[x][y] = [];
+				for (let z = 0; z < dimensions[2]; z++) {
+					const i = (x * dimensions[1] + y) * dimensions[2] + z;
+					out[x][y][z] = reals[i];
+				}
+			}
+		}
+		return out as number[][][] as any;
+	}
 }

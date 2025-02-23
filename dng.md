@@ -79,3 +79,60 @@ the top-left corner of the ActiveArea rectangle.
 The LinearRaw PhotometricInterpretation value is intended for use by cameras that do not use color filter
 arrays, but instead capture all color components at each pixel. It can also be used for CFA data that has
 already been de-mosaiced
+
+# Camera Profiles
+
+These are stored in IFD 0 (rather than the Raw IFD).
+
+* 1.2.0.0+
+    * `BaselineExposureOffset`
+    * `CalibrationIlluminant1`
+    * `CalibrationIlluminant2`
+    * `ColorMatrix1`
+    * `ColorMatrix2`
+    * `DefaultBlackRender`
+    * `ForwardMatrix1`
+    * `ForwardMatrix2`
+    * `ProfileCalibrationSignature`
+    * `ProfileCopyright`
+    * `ProfileEmbedPolicy`
+    * `ProfileHueSatMapData1`
+    * `ProfileHueSatMapData2`
+    * `ProfileHueSatMapDims`
+    * `ProfileHueSatMapEncoding`
+    * `ProfileLookTableData`
+    * `ProfileLookTableDims`
+    * `ProfileLookTableEncoding`
+    * `ProfileName`
+    * `ProfileToneCurve`
+    * `ReductionMatrix1`
+    * `ReductionMatrix2`
+* 1.6.0.0+
+    * `CalibrationIlluminant3`
+    * `ColorMatrix3`
+    * `ForwardMatrix3`
+    * `IlluminantData1`
+    * `IlluminantData2`
+    * `IlluminantData3`
+    * `ProfileHueSatMapData3`
+    * `ReductionMatrix3`
+* 1.7.0.0+
+    * `ProfileDynamicRange`
+    * `ProfileGroupName`
+
+# PhotometricInterpretation
+
+* `32803` is CFA (Color Filter Array).
+
+* `CFAPattern` uses
+    * `0`: Red
+    * `1`: Green
+    * `2`: Blue
+    * `3`: Cyan
+    * `4`: Magenta
+    * `5`: Yellow
+    * `6`: White
+
+* `CFALayout`
+    * `1`: Rectangular
+    * `2`: Staggered; even (one-indexed) columns offset 1/2 row

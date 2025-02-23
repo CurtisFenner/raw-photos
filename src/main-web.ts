@@ -1,6 +1,30 @@
 import { Linearizer } from "./dng.js";
 import * as tiffEp from "./tiff-ep.js";
 import * as tiff6 from "./tiff6.js";
+import * as color from "./color.js";
+
+const showColorTemperatureTable = false;
+if (showColorTemperatureTable) {
+	const table = document.createElement("table");
+	for (let temperature = 4_000; temperature < 15_000; temperature += 500) {
+		const row = document.createElement("tr");
+
+		const th = document.createElement("th");
+		th.textContent = temperature.toFixed(0) + " K";
+		row.appendChild(th);
+
+		const xyz = color.daylightXYZ(temperature, 0.8);
+		const { oklab } = color.convertXYZ(xyz);
+
+		const td = document.createElement("td");
+		td.textContent = color.colorTemperatureKelvin({ x: xyz.x / (xyz.x + xyz.y + xyz.z), y: xyz.y / (xyz.x + xyz.y + xyz.z) }).toFixed(0) + " K?";
+		td.style.background = `oklab(${(oklab.l * 100).toFixed(1)}% ${oklab.a} ${oklab.b})`;
+		row.appendChild(td);
+
+		table.appendChild(row);
+	}
+	document.body.appendChild(table);
+}
 
 const ms0 = performance.now();
 const dngResponse = await fetch("vending.dng");
@@ -32,7 +56,6 @@ const linearizer = new Linearizer(rawIFD);
 console.log(linearizer);
 for (const segment of tiffEp.readImageSegments(rawIFD)) {
 	const linearized = linearizer.linearizeImageSegment(rawIFD, segment);
-	console.log({ linearized });
 
 	const canvas = document.createElement("canvas");
 	canvas.width = segment.x1 - segment.x0;

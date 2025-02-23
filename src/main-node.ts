@@ -2,7 +2,6 @@ import * as fs from "node:fs";
 import { FIELD_TYPES, parseTIFF_EP, readASCII, readImageSegments, readInts, readReals, readTag } from "./tiff-ep.js";
 import { DNG_TAGS } from "./dng.js";
 import { TIFF6_TAG_VALUES, TIFF6_TAGS } from "./tiff6.js";
-import { decodeJPEG } from "./jpeg.js";
 
 const dng = fs.readFileSync("vending.dng");
 
@@ -46,7 +45,7 @@ for (let i = 0; i < out.ifds.length; i++) {
 		}
 
 		const reals = readReals(out.scanner, entry);
-		if (reals) {
+		if (reals && !ints) {
 			if (reals.length > 8) {
 				console.log(`\t\t[${reals.slice(0, 8).join(", ")}, ...]`);
 			} else {
@@ -60,11 +59,3 @@ const rawIfd = out.ifds.findLast(x => {
 	const f = readTag(x, TIFF6_TAG_VALUES.NewSubfileType, readInts);
 	return f && f[0] === 0;
 })!;
-
-for (const segment of readImageSegments(rawIfd)) {
-	const slice = out.scanner.getSlice(segment);
-	console.log("-".repeat(80));
-	console.log(segment);
-	console.log(slice);
-	const markers = decodeJPEG(slice);
-}
