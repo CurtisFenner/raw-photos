@@ -46,8 +46,8 @@ for (let i = 0; i < out.ifds.length; i++) {
 
 		const reals = readReals(out.scanner, entry);
 		if (reals && !ints) {
-			if (reals.length > 8) {
-				console.log(`\t\t[${reals.slice(0, 8).join(", ")}, ...]`);
+			if (reals.length > 16) {
+				console.log(`\t\t[${reals.slice(0, 16).join(", ")}, ...]`);
 			} else {
 				console.log(`\t\t[${reals.join(", ")}]`);
 			}

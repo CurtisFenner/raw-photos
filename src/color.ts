@@ -1,3 +1,7 @@
+import { diagonalMatrix as matrixWithDiagonal, matrixInverse, matrixMultiply, matrixToArray } from "./data.js";
+import { readRealRectangles, readRealsTagExpectingSize } from "./dng.js";
+import { ImageFileDirectory } from "./tiff-ep.js";
+
 export type XYZ = {
 	space: "XYZ",
 	x: number,
@@ -10,6 +14,17 @@ export type Oklab = {
 	l: number,
 	a: number,
 	b: number,
+};
+
+/**
+ * This space is not directly displayable, because each camera captures color
+ * differently.
+ */
+export type CameraRGB = {
+	space: "CameraRGB",
+	red: number,
+	green: number,
+	blue: number,
 };
 
 export type LMS = {
@@ -122,4 +137,121 @@ export function daylightXYZ(temperatureK: number, luminance: number): XYZ {
 		y: luminance,
 		z: luminance * z / y,
 	};
+}
+
+const ILLUMINANT_COLOR_TEMPERATURE_K: Record<number, number> = {
+	/**
+	 * Illuminant A. Standard tungsten incandescant bulb.
+	 */
+	17: 2856,
+	/** D65. */
+	21: 6500,
+};
+
+export class WhiteBalance {
+	private colorMatrix1: number[][];
+	private forwardMatrix1: number[][];
+	private cameraCalibration1: number[][];
+	private analogBalance: number[];
+
+	/**
+	 * https://exiftool.org/TagNames/EXIF.html#LightSource
+	 * 0: Unknown
+	 * 1: Daylight
+	 * 2: Fluorescent
+	 * 3: Tungesten (Incandescent)
+	 * 4: Flash
+	 * 9: Fine Weather
+	 * 10: Cloudy
+	 * 11: Shade
+	 * 12: Daylight Fluorescent
+	 * 13: Day White Fluorescent
+	 * 14: Cool White Fluorescent
+	 * 15: White Fluorescent
+	 * 16: Warm White Fluorescent
+	 * 17: Standard Light A
+	 * 18: Standard Light B
+	 * 19: Standard Light C
+	 * 20: D55
+	 * 21: D65
+	 * 22: D75
+	 * 23: D50
+	 * 24: ISO Studio Tungesten
+	 * 255: Other
+	 */
+	private calibrationIlluminant1: number;
+	private calibrationIlluminant1xyz: XYZ;
+
+	/** AnalogBalance * CameraCalibration */
+	private rgbGain: number[][];
+	private rgbGainInverse: number[][];
+	/** CameraNeutral = (rgbGain * ColorMatrix) * XYZNeutral */
+	private cameraNeutral: CameraRGB;
+
+	/** toXYZ_D50 = ForwardMatrix * ReferenceNeutral^-1 * (rgbGain)^-1 */
+	private toXYZ_d50: number[][];
+
+	/** The neutral white balance in the linear space. */
+	private asShotNeutral: number[];
+
+	constructor(ifd: ImageFileDirectory) {
+		this.asShotNeutral = readRealsTagExpectingSize(ifd, "AsShotNeutral", 3);
+
+		this.colorMatrix1 = readRealRectangles<2>(ifd, "ColorMatrix1", [3, 3]);
+		this.forwardMatrix1 = readRealRectangles<2>(ifd, "ForwardMatrix1", [3, 3]);
+		this.cameraCalibration1 = readRealRectangles<2>(ifd, "CameraCalibration1", [3, 3]);
+		this.analogBalance = readRealsTagExpectingSize(ifd, "AnalogBalance", 3, { default: 1 });
+		this.calibrationIlluminant1 = readRealsTagExpectingSize(ifd, "CalibrationIlluminant1", 1)[0];
+
+		this.calibrationIlluminant1xyz = daylightXYZ(ILLUMINANT_COLOR_TEMPERATURE_K[this.calibrationIlluminant1], 1);
+
+		this.rgbGain = matrixMultiply(matrixWithDiagonal(this.analogBalance), this.cameraCalibration1);
+		this.rgbGainInverse = matrixInverse(this.rgbGain);
+
+		const cameraNeutral = matrixMultiply(matrixMultiply(this.rgbGain, this.colorMatrix1), [
+			[this.calibrationIlluminant1xyz.x], [this.calibrationIlluminant1xyz.y], [this.calibrationIlluminant1xyz.z],
+		]);
+		this.cameraNeutral = {
+			space: "CameraRGB",
+			red: cameraNeutral[0][0],
+			green: cameraNeutral[1][0],
+			blue: cameraNeutral[2][0],
+		};
+
+		/** ReferenceNeutral = (rgbGain)^-1 * cameraNeutral */
+		const referenceNeutral = matrixMultiply(this.rgbGainInverse, cameraNeutral);
+
+		this.toXYZ_d50 = matrixMultiply(
+			matrixMultiply(
+				this.forwardMatrix1,
+				matrixWithDiagonal(matrixToArray(referenceNeutral)),
+			),
+			this.rgbGainInverse,
+		);
+	}
+
+	toRGB(cameraRGB: CameraRGB): CameraRGB {
+		const red = cameraRGB.red / this.asShotNeutral[0];
+		const green = cameraRGB.green / this.asShotNeutral[1];
+		const blue = cameraRGB.blue / this.asShotNeutral[2];
+		return {
+			space: "CameraRGB",
+			red,
+			green,
+			blue,
+		};
+	}
+
+	toXYZ(cameraRGB: CameraRGB): XYZ {
+		// ReferenceNeutral = (rgbGain)^-1 * CameraNeutral
+		// toXYZ_D50 = ForwardMatrix * ReferenceNeutral^-1 * (rgbGain)^-1
+		const rgb = [[cameraRGB.red / this.asShotNeutral[0]], [cameraRGB.green / this.asShotNeutral[1]], [cameraRGB.blue / this.asShotNeutral[2]]];
+		const product = matrixMultiply(this.toXYZ_d50, rgb);
+		return {
+			space: "XYZ",
+			x: product[0][0],
+			y: product[1][0],
+			z: product[2][0],
+		};
+	}
 }

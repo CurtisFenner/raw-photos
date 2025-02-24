@@ -13,6 +13,13 @@ export type I8 = number;
 export type I16 = number;
 export type I32 = number;
 
+export function mod(a: number, b: number) {
+	if (a >= 0) {
+		return a % b;
+	}
+	return (a % b) + b;
+}
+
 export class Scanner {
 	private dataView: DataView;
 	public offset: number = 0;
@@ -227,4 +234,106 @@ export class BitStream {
 	assert(stream.peek16BigEndian(), "is equal to", 0b0000_0000_0000_1111);
 	stream.advanceBits(1);
 	assert(stream.peek16BigEndian(), "is equal to", 0b000_0000_0000_1111_1);
+}
+
+export function matrixMultiply(a: number[][], b: number[][]): number[][] {
+	if (a[0].length !== b.length) {
+		throw new Error(`matrixMultiply(${a.length}x${a[0].length}, ${b.length}x${b[0].length}): invalid dimensions`);
+	}
+
+	const out: number[][] = [];
+	for (let r = 0; r < a.length; r++) {
+		out[r] = [];
+		for (let c = 0; c < b[0].length; c++) {
+			out[r][c] = 0;
+			for (let k = 0; k < a[0].length; k++) {
+				out[r][c] += a[r][k] * b[k][c];
+			}
+		}
+	}
+	return out;
+}
+
+export function diagonalMatrix(diagonal: number[]): number[][] {
+	const out: number[][] = [];
+	for (let r = 0; r < diagonal.length; r++) {
+		out[r] = [];
+		for (let c = 0; c < diagonal.length; c++) {
+			out[r][c] = 0;
+		}
+		out[r][r] = diagonal[r];
+	}
+	return out;
+}
+
+export function matrixInverse(matrix: number[][]): number[][] {
+	// A^-1 = adjugate(A) / determinant(A)
+	const adj = matrixAdjugate(matrix);
+	const det = matrixDeterminant(matrix);
+	for (const row of adj) {
+		for (let c = 0; c < row.length; c++) {
+			row[c] /= det;
+		}
+	}
+	return adj;
+}
+
+export function matrixAdjugate(matrix: number[][]): number[][] {
+	const out: number[][] = [];
+	for (let r = 0; r < matrix.length; r++) {
+		out[r] = [];
+		for (let c = 0; c < matrix.length; c++) {
+			const sign = (r % 2 === c % 2) ? 1 : -1;
+			out[r][c] = sign * matrixDeterminant(dropRowColumn(matrix, c, r));
+		}
+	}
+	return out;
+}
+
+export function dropRowColumn(matrix: number[][], dropRow: number, dropColumn: number): number[][] {
+	const out: number[][] = [];
+	for (let r = 0; r < matrix.length; r++) {
+		if (r === dropRow) {
+			continue;
+		}
+		const row: number[] = [];
+		for (let c = 0; c < matrix[r].length; c++) {
+			if (c === dropColumn) {
+				continue;
+			}
+			row.push(matrix[r][c]);
+		}
+		out.push(row);
+	}
+	return out;
+}
+
+export function matrixDeterminant(matrix: number[][]): number {
+	if (matrix[0].length !== matrix.length) {
+		throw new Error("matrixDeterminant: only accepts square matrices");
+	}
+
+	if (matrix.length === 1) {
+		return matrix[0][0];
+	} else if (matrix.length === 2) {
+		return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0];
+	}
+
+	let sum = 0;
+	for (let c = 0; c < matrix.length; c++) {
+		const cofactor = (c % 2 === 0 ? +1 : -1) * matrix[0][c];
+		const minor = dropRowColumn(matrix, 0, c);
+		sum += cofactor * matrixDeterminant(minor);
+	}
+	return sum;
+}
+
+export function matrixToArray(matrix: number[][]): number[] {
+	const out = [];
+	for (const row of matrix) {
+		for (const v of row) {
+			out.push(v);
+		}
+	}
+	return out;
 }

@@ -1,4 +1,4 @@
-import { I32 } from "./data.js";
+import { I32, mod } from "./data.js";
 import * as jpeg from "./jpeg.js";
 import * as tiffEp from "./tiff-ep.js";
 import { TIFF6_TAG_VALUES } from "./tiff6.js";
@@ -394,24 +394,27 @@ class ActiveArea {
 	}
 }
 
-class ActiveAreaPattern {
+export class ActiveAreaPattern {
+	public readonly patternWidth: number;
+	public readonly patternHeight: number;
 	constructor(
 		public readonly activeArea: ActiveArea,
 		private pattern: number[][],
-	) { }
+	) {
+		this.patternHeight = pattern.length;
+		this.patternWidth = pattern[0].length;
+	}
 
 	getPixel(row: number, column: number): number {
-		const u = mod(row - this.activeArea.activeAreaLeft, this.pattern.length);
-		const v = mod(row - this.activeArea.activeAreaTop, this.pattern[0].length);
+		const [u, v] = this.patternIndex(row, column);
 		return this.pattern[u][v];
 	}
-}
 
-function mod(a: number, b: number) {
-	if (a >= 0) {
-		return a % b;
+	patternIndex(row: number, column: number) {
+		const u = mod(row - this.activeArea.activeAreaLeft, this.pattern.length);
+		const v = mod(column - this.activeArea.activeAreaTop, this.pattern[0].length);
+		return [u, v];
 	}
-	return (a % b) + b;
 }
 
 /** From "Mapping Raw Values to Linear Reference Values" in DNG Spec 1.7.1.0 */
@@ -538,6 +541,7 @@ export class Linearizer {
 		return out;
 	}
 
+	/** [c][y][x] */
 	sampleImageSegment(
 		rawIFD: tiffEp.ImageFileDirectory,
 		segment: { x0: number, y0: number, x1: number, y1: number, offset: number, byteCount: number },
@@ -605,7 +609,7 @@ const ALL_TAG_VALUES = {
 	...TIFF6_TAG_VALUES,
 };
 
-function readRealsTagExpectingSize(
+export function readRealsTagExpectingSize(
 	ifd: tiffEp.ImageFileDirectory,
 	tagName: keyof typeof ALL_TAG_VALUES,
 	expectedSize: number,
@@ -636,7 +640,7 @@ function readRealsTagExpectingSize(
 	return reals;
 }
 
-function readRealRectangles<C extends number>(
+export function readRealRectangles<C extends number>(
 	ifd: tiffEp.ImageFileDirectory,
 	tagName: keyof typeof ALL_TAG_VALUES,
 	dimensions: C extends 2 ? [number, number] : [number, number, number],

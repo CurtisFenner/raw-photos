@@ -1,7 +1,8 @@
-import { Linearizer } from "./dng.js";
+import * as dng from "./dng.js";
 import * as tiffEp from "./tiff-ep.js";
 import * as tiff6 from "./tiff6.js";
 import * as color from "./color.js";
+import * as mosaic from "./mosaic.js";
 
 const showColorTemperatureTable = false;
 if (showColorTemperatureTable) {
@@ -29,10 +30,9 @@ if (showColorTemperatureTable) {
 const ms0 = performance.now();
 const dngResponse = await fetch("vending.dng");
 const msResponse = performance.now();
-const dng = new Uint8Array(await dngResponse.arrayBuffer());
 const msBytes = performance.now();
 
-const tiff = tiffEp.parseTIFF_EP(dng);
+const tiff = tiffEp.parseTIFF_EP(new Uint8Array(await dngResponse.arrayBuffer()));
 
 const msTIFF = performance.now();
 
@@ -52,8 +52,13 @@ document.body.appendChild(div);
 div.style.background = "lime";
 
 console.log(rawIFD);
-const linearizer = new Linearizer(rawIFD);
+const linearizer = new dng.Linearizer(rawIFD);
 console.log(linearizer);
+
+const rggb = new dng.ActiveAreaPattern(linearizer.activeArea, [[0, 1], [1, 2]]);
+
+const demosaic = new mosaic.RGGBMosaic(rggb);
+
 for (const segment of tiffEp.readImageSegments(rawIFD)) {
 	const linearized = linearizer.linearizeImageSegment(rawIFD, segment);
 
@@ -67,12 +72,20 @@ for (const segment of tiffEp.readImageSegments(rawIFD)) {
 	canvas.style.imageRendering = "pixelated";
 	const ctx = canvas.getContext("2d")!;
 
+	const colorized = demosaic.demosaic(linearized[0], segment);
+
+	const whiteBalance = new color.WhiteBalance(tiff.ifds[0]);
+	console.log({ whiteBalance });
+
 	// Draw difference data.
-	for (let y = 0; y < linearized[0].length; y++) {
-		for (let x = 0; x < linearized[0][y].length; x++) {
-			const s = (linearized[0][y][x] * 100).toFixed(1) + "%";
-			const color = `rgb(${s} ${s} ${s})`;
-			ctx.fillStyle = color;
+	for (let y = 0; y < colorized.length; y++) {
+		for (let x = 0; x < colorized[y].length; x++) {
+			const v = whiteBalance.toRGB(colorized[y][x]);
+			// const xyz = whiteBalance.toXYZ(v);
+			// const { oklab } = color.convertXYZ(xyz);
+			// let fill = `oklab(${(oklab.l * 100).toFixed(1)}% ${oklab.a} ${oklab.b})`;
+			let fill = `rgb(${(v.red * 100).toFixed(1)}% ${(v.green * 100).toFixed(1)}% ${(v.blue * 100).toFixed(1)}%)`;
+			ctx.fillStyle = fill;
 			ctx.fillRect(x, y, 1, 1);
 		}
 	}
