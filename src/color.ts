@@ -139,48 +139,66 @@ export function daylightXYZ(temperatureK: number, luminance: number): XYZ {
 	};
 }
 
-const ILLUMINANT_COLOR_TEMPERATURE_K: Record<number, number> = {
+/**
+ * https://exiftool.org/TagNames/EXIF.html#LightSource
+ * 0: Unknown
+ * 1: Daylight
+ * 2: Fluorescent
+ * 3: Tungesten (Incandescent)
+ * 4: Flash
+ * 9: Fine Weather
+ * 10: Cloudy
+ * 11: Shade
+ * 12: Daylight Fluorescent
+ * 13: Day White Fluorescent
+ * 14: Cool White Fluorescent
+ * 15: White Fluorescent
+ * 16: Warm White Fluorescent
+ * 17: Standard Light A
+ * 18: Standard Light B
+ * 19: Standard Light C
+ * 20: D55
+ * 21: D65
+ * 22: D75
+ * 23: D50
+ * 24: ISO Studio Tungesten
+ * 255: Other
+ */
+const STANDARD_ILLUMINANTS: Record<number, {
+	temperatureK: number,
+	tri: XYZ,
+}> = {
 	/**
 	 * Illuminant A. Standard tungsten incandescant bulb.
 	 */
-	17: 2856,
+	17: {
+		temperatureK: 2856,
+		tri: {
+			space: "XYZ",
+			x: 109.85,
+			y: 100,
+			z: 35.58,
+		},
+	},
 	/** D65. */
-	21: 6500,
+	21: {
+		temperatureK: 6504,
+		tri: {
+			space: "XYZ",
+			x: 95.047,
+			y: 100,
+			z: 108.883,
+		},
+	},
 };
 
 export class WhiteBalance {
-	private colorMatrix1: number[][];
-	private forwardMatrix1: number[][];
-	private cameraCalibration1: number[][];
+	private colorMatrix: number[][];
+	private forwardMatrix: number[][];
+	private cameraCalibration: number[][];
 	private analogBalance: number[];
 
-	/**
-	 * https://exiftool.org/TagNames/EXIF.html#LightSource
-	 * 0: Unknown
-	 * 1: Daylight
-	 * 2: Fluorescent
-	 * 3: Tungesten (Incandescent)
-	 * 4: Flash
-	 * 9: Fine Weather
-	 * 10: Cloudy
-	 * 11: Shade
-	 * 12: Daylight Fluorescent
-	 * 13: Day White Fluorescent
-	 * 14: Cool White Fluorescent
-	 * 15: White Fluorescent
-	 * 16: Warm White Fluorescent
-	 * 17: Standard Light A
-	 * 18: Standard Light B
-	 * 19: Standard Light C
-	 * 20: D55
-	 * 21: D65
-	 * 22: D75
-	 * 23: D50
-	 * 24: ISO Studio Tungesten
-	 * 255: Other
-	 */
-	private calibrationIlluminant1: number;
-	private calibrationIlluminant1xyz: XYZ;
+	private calibrationIlluminantxyz: XYZ;
 
 	/** AnalogBalance * CameraCalibration */
 	private rgbGain: number[][];
@@ -194,22 +212,27 @@ export class WhiteBalance {
 	/** The neutral white balance in the linear space. */
 	private asShotNeutral: number[];
 
-	constructor(ifd: ImageFileDirectory) {
+	constructor(ifd: ImageFileDirectory, flag: 1 | 2) {
 		this.asShotNeutral = readRealsTagExpectingSize(ifd, "AsShotNeutral", 3);
 
-		this.colorMatrix1 = readRealRectangles<2>(ifd, "ColorMatrix1", [3, 3]);
-		this.forwardMatrix1 = readRealRectangles<2>(ifd, "ForwardMatrix1", [3, 3]);
-		this.cameraCalibration1 = readRealRectangles<2>(ifd, "CameraCalibration1", [3, 3]);
+		this.colorMatrix = readRealRectangles<2>(ifd, `ColorMatrix${flag}`, [3, 3]);
+		this.forwardMatrix = readRealRectangles<2>(ifd, `ForwardMatrix${flag}`, [3, 3]);
+		this.cameraCalibration = readRealRectangles<2>(ifd, `CameraCalibration${flag}`, [3, 3]);
+
+		const calibrationIlluminant = readRealsTagExpectingSize(ifd, `CalibrationIlluminant${flag}`, 1)[0];
+		const calibrationData = STANDARD_ILLUMINANTS[calibrationIlluminant];
+		if (!calibrationData) {
+			throw new Error(`unsupported calibration illuminant ${calibrationIlluminant}`);
+		}
+		this.calibrationIlluminantxyz = daylightXYZ(calibrationData.temperatureK, 1);
+
 		this.analogBalance = readRealsTagExpectingSize(ifd, "AnalogBalance", 3, { default: 1 });
-		this.calibrationIlluminant1 = readRealsTagExpectingSize(ifd, "CalibrationIlluminant1", 1)[0];
 
-		this.calibrationIlluminant1xyz = daylightXYZ(ILLUMINANT_COLOR_TEMPERATURE_K[this.calibrationIlluminant1], 1);
-
-		this.rgbGain = matrixMultiply(matrixWithDiagonal(this.analogBalance), this.cameraCalibration1);
+		this.rgbGain = matrixMultiply(matrixWithDiagonal(this.analogBalance), this.cameraCalibration);
 		this.rgbGainInverse = matrixInverse(this.rgbGain);
 
-		const cameraNeutral = matrixMultiply(matrixMultiply(this.rgbGain, this.colorMatrix1), [
-			[this.calibrationIlluminant1xyz.x], [this.calibrationIlluminant1xyz.y], [this.calibrationIlluminant1xyz.z],
+		const cameraNeutral = matrixMultiply(matrixMultiply(this.rgbGain, this.colorMatrix), [
+			[this.calibrationIlluminantxyz.x], [this.calibrationIlluminantxyz.y], [this.calibrationIlluminantxyz.z],
 		]);
 		this.cameraNeutral = {
 			space: "CameraRGB",
@@ -223,11 +246,31 @@ export class WhiteBalance {
 
 		this.toXYZ_d50 = matrixMultiply(
 			matrixMultiply(
-				this.forwardMatrix1,
+				this.forwardMatrix,
 				matrixWithDiagonal(matrixToArray(referenceNeutral)),
 			),
 			this.rgbGainInverse,
 		);
+
+		const colorMatrix1 = readRealRectangles<2>(ifd, "ColorMatrix1", [3, 3]);
+		const illuminantID1 = readRealsTagExpectingSize(ifd, "CalibrationIlluminant1", 1)[0];
+		const illuminant1 = STANDARD_ILLUMINANTS[illuminantID1];
+		const colorMatrix2 = readRealRectangles<2>(ifd, "ColorMatrix2", [3, 3]);
+		const illuminantID2 = readRealsTagExpectingSize(ifd, "CalibrationIlluminant2", 1)[0];
+		const illuminant2 = STANDARD_ILLUMINANTS[illuminantID2];
+		if (!illuminant1 || !illuminant2) {
+			throw new Error("unrecognized standard illuminants");
+		}
+		const linear1 = matrixMultiply(
+			matrixInverse(colorMatrix1),
+			[[illuminant1.tri.x], [illuminant1.tri.y], [illuminant1.tri.z]],
+		);
+		const linear2 = matrixMultiply(
+			matrixInverse(colorMatrix2),
+			[[illuminant2.tri.x], [illuminant2.tri.y], [illuminant2.tri.z]],
+		);
+		console.log(illuminant1, "=>", linear1);
+		console.log(illuminant2, "=>", linear2);
 	}
 
 	toRGB(cameraRGB: CameraRGB): CameraRGB {
@@ -245,8 +288,8 @@ export class WhiteBalance {
 	toXYZ(cameraRGB: CameraRGB): XYZ {
 		// ReferenceNeutral = (rgbGain)^-1 * CameraNeutral
 		// toXYZ_D50 = ForwardMatrix * ReferenceNeutral^-1 * (rgbGain)^-1
-		const rgb = [[cameraRGB.red / this.asShotNeutral[0]], [cameraRGB.green / this.asShotNeutral[1]], [cameraRGB.blue / this.asShotNeutral[2]]];
-		const product = matrixMultiply(this.toXYZ_d50, rgb);
+		const rgb = this.toRGB(cameraRGB);
+		const product = matrixMultiply(this.toXYZ_d50, [[rgb.red], [rgb.green], [rgb.blue]]);
 		return {
 			space: "XYZ",
 			x: product[0][0],

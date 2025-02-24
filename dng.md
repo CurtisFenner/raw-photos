@@ -136,3 +136,13 @@ These are stored in IFD 0 (rather than the Raw IFD).
 * `CFALayout`
     * `1`: Rectangular
     * `2`: Staggered; even (one-indexed) columns offset 1/2 row
+
+# Extracting color
+
+* The linear RGB values must be scaled by either
+    * `AsShotNeutral` (ifd 0, _NOT raw IFD_)
+        * Divide each component by this value.
+        * This compensates for the fact that red and blue filters cut out
+          more light than green pigments.
+    * `AsShotWhiteXY`  (ifd 0, _NOT raw IFD_)
+        * (???)

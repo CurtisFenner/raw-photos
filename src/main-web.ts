@@ -28,7 +28,7 @@ if (showColorTemperatureTable) {
 }
 
 const ms0 = performance.now();
-const dngResponse = await fetch("vending.dng");
+const dngResponse = await fetch("salt.dng");
 const msResponse = performance.now();
 const msBytes = performance.now();
 
@@ -59,6 +59,9 @@ const rggb = new dng.ActiveAreaPattern(linearizer.activeArea, [[0, 1], [1, 2]]);
 
 const demosaic = new mosaic.RGGBMosaic(rggb);
 
+const whiteBalance1 = new color.WhiteBalance(tiff.ifds[0], 1);
+const whiteBalance2 = new color.WhiteBalance(tiff.ifds[0], 2);
+
 for (const segment of tiffEp.readImageSegments(rawIFD)) {
 	const linearized = linearizer.linearizeImageSegment(rawIFD, segment);
 
@@ -74,17 +77,18 @@ for (const segment of tiffEp.readImageSegments(rawIFD)) {
 
 	const colorized = demosaic.demosaic(linearized[0], segment);
 
-	const whiteBalance = new color.WhiteBalance(tiff.ifds[0]);
-	console.log({ whiteBalance });
 
 	// Draw difference data.
 	for (let y = 0; y < colorized.length; y++) {
 		for (let x = 0; x < colorized[y].length; x++) {
+			const whiteBalance = x < y
+				? whiteBalance1
+				: whiteBalance2;
 			const v = whiteBalance.toRGB(colorized[y][x]);
-			// const xyz = whiteBalance.toXYZ(v);
-			// const { oklab } = color.convertXYZ(xyz);
-			// let fill = `oklab(${(oklab.l * 100).toFixed(1)}% ${oklab.a} ${oklab.b})`;
-			let fill = `rgb(${(v.red * 100).toFixed(1)}% ${(v.green * 100).toFixed(1)}% ${(v.blue * 100).toFixed(1)}%)`;
+			const xyz = whiteBalance.toXYZ(v);
+			const { oklab } = color.convertXYZ(xyz);
+			let fill = `oklab(${(oklab.l * 100).toFixed(1)}% ${oklab.a} ${oklab.b})`;
+			// let fill = `rgb(${(v.red * 100).toFixed(1)}% ${(v.green * 100).toFixed(1)}% ${(v.blue * 100).toFixed(1)}%)`;
 			ctx.fillStyle = fill;
 			ctx.fillRect(x, y, 1, 1);
 		}
