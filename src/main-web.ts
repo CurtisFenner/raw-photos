@@ -62,6 +62,11 @@ const demosaic = new mosaic.RGGBMosaic(rggb);
 const whiteBalance1 = new color.WhiteBalance(tiff.ifds[0], 1);
 const whiteBalance2 = new color.WhiteBalance(tiff.ifds[0], 2);
 
+console.log({
+	whiteBalance1,
+	whiteBalance2,
+});
+
 for (const segment of tiffEp.readImageSegments(rawIFD)) {
 	const linearized = linearizer.linearizeImageSegment(rawIFD, segment);
 
@@ -77,17 +82,14 @@ for (const segment of tiffEp.readImageSegments(rawIFD)) {
 
 	const colorized = demosaic.demosaic(linearized[0], segment);
 
-
-	// Draw difference data.
 	for (let y = 0; y < colorized.length; y++) {
 		for (let x = 0; x < colorized[y].length; x++) {
 			const whiteBalance = x < y
 				? whiteBalance1
 				: whiteBalance2;
-			const v = whiteBalance.toRGB(colorized[y][x]);
-			const xyz = whiteBalance.toXYZ(v);
-			const { oklab } = color.convertXYZ(xyz);
-			let fill = `oklab(${(oklab.l * 100).toFixed(1)}% ${oklab.a} ${oklab.b})`;
+			const v = colorized[y][x];
+			const xyz = whiteBalance.toXYZ_D50(v);
+			let fill = `color(xyz-d50 ${xyz.x.toFixed(4)} ${xyz.y.toFixed(4)} ${xyz.z.toFixed(4)})`;
 			// let fill = `rgb(${(v.red * 100).toFixed(1)}% ${(v.green * 100).toFixed(1)}% ${(v.blue * 100).toFixed(1)}%)`;
 			ctx.fillStyle = fill;
 			ctx.fillRect(x, y, 1, 1);

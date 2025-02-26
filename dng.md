@@ -141,8 +141,8 @@ These are stored in IFD 0 (rather than the Raw IFD).
 
 * The linear RGB values must be scaled by either
     * `AsShotNeutral` (ifd 0, _NOT raw IFD_)
-        * Divide each component by this value.
-        * This compensates for the fact that red and blue filters cut out
-          more light than green pigments.
+        * This is controlled by the camera's color-temperature slider;
+          the color-temperature slider does not appear to dramatically affect
+          the actual values recorded in the raw IFD.
     * `AsShotWhiteXY`  (ifd 0, _NOT raw IFD_)
         * (???)

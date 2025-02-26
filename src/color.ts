@@ -198,42 +198,73 @@ export class WhiteBalance {
 	private cameraCalibration: number[][];
 	private analogBalance: number[];
 
-	private calibrationIlluminantxyz: XYZ;
-
-	/** AnalogBalance * CameraCalibration */
-	private rgbGain: number[][];
-	private rgbGainInverse: number[][];
-	/** CameraNeutral = (rgbGain * ColorMatrix) * XYZNeutral */
-	private cameraNeutral: CameraRGB;
-
-	/** toXYZ_D50 = ForwardMatrix * ReferenceNeutral^-1 * (rgbGain)^-1 */
-	private toXYZ_d50: number[][];
-
 	/** The neutral white balance in the linear space. */
 	private asShotNeutral: number[];
+
+	private xyzNeutral: XYZ;
+
+	/**
+	 * "AB * CC * CM"
+	 * XYZ -> This CameraRGB (under illuminant)
+	 */
+	private xyzToCamera: number[][];
+
+	/**
+	 * This CameraRGB
+	 */
+	private cameraNeutral: CameraRGB;
+
+	/** "ReferenceNeutral = (AB * CC)^-1 * CameraNeutral"
+	 * Reference CameraRGB
+	 */
+	private referenceNeutral: CameraRGB;
+
+	/** "D"
+	 * Reference CameraRGB -> White-balanced CameraRGB
+	 */
+	private cameraWhiteBalancing: number[][];
+
+	/**
+	 * "CameraToXYZ_D50 = FM * D * (AB * CC)^-1"
+	 * This CameraRGB -> XYZ_D50
+	 *
+	 * D: Reference CameraRGB -> White-balanced CameraRGB
+	 */
+	private cameraToXYZ_D50: number[][];
 
 	constructor(ifd: ImageFileDirectory, flag: 1 | 2) {
 		this.asShotNeutral = readRealsTagExpectingSize(ifd, "AsShotNeutral", 3);
 
+		// XYZ -> Reference CameraRGB (under illuminant)
 		this.colorMatrix = readRealRectangles<2>(ifd, `ColorMatrix${flag}`, [3, 3]);
+
+		// White-balanced CameraRGB -> XYZ_D50
 		this.forwardMatrix = readRealRectangles<2>(ifd, `ForwardMatrix${flag}`, [3, 3]);
+
+		// Reference CameraRGB -> This CameraRGB (under illuminant)
 		this.cameraCalibration = readRealRectangles<2>(ifd, `CameraCalibration${flag}`, [3, 3]);
+
+		this.analogBalance = readRealsTagExpectingSize(ifd, "AnalogBalance", 3, { default: 1 });
 
 		const calibrationIlluminant = readRealsTagExpectingSize(ifd, `CalibrationIlluminant${flag}`, 1)[0];
 		const calibrationData = STANDARD_ILLUMINANTS[calibrationIlluminant];
 		if (!calibrationData) {
 			throw new Error(`unsupported calibration illuminant ${calibrationIlluminant}`);
 		}
-		this.calibrationIlluminantxyz = daylightXYZ(calibrationData.temperatureK, 1);
+		this.xyzNeutral = daylightXYZ(calibrationData.temperatureK, 1);
 
-		this.analogBalance = readRealsTagExpectingSize(ifd, "AnalogBalance", 3, { default: 1 });
+		this.xyzToCamera = matrixMultiply(
+			matrixWithDiagonal(this.analogBalance),
+			matrixMultiply(
+				this.cameraCalibration,
+				this.colorMatrix,
+			),
+		);
 
-		this.rgbGain = matrixMultiply(matrixWithDiagonal(this.analogBalance), this.cameraCalibration);
-		this.rgbGainInverse = matrixInverse(this.rgbGain);
-
-		const cameraNeutral = matrixMultiply(matrixMultiply(this.rgbGain, this.colorMatrix), [
-			[this.calibrationIlluminantxyz.x], [this.calibrationIlluminantxyz.y], [this.calibrationIlluminantxyz.z],
-		]);
+		const cameraNeutral = matrixMultiply(
+			this.xyzToCamera,
+			[[this.xyzNeutral.x], [this.xyzNeutral.y], [this.xyzNeutral.z]],
+		);
 		this.cameraNeutral = {
 			space: "CameraRGB",
 			red: cameraNeutral[0][0],
@@ -241,15 +272,37 @@ export class WhiteBalance {
 			blue: cameraNeutral[2][0],
 		};
 
-		/** ReferenceNeutral = (rgbGain)^-1 * cameraNeutral */
-		const referenceNeutral = matrixMultiply(this.rgbGainInverse, cameraNeutral);
+		const referenceNeutral = matrixMultiply(
+			matrixInverse(matrixMultiply(
+				matrixWithDiagonal(this.analogBalance),
+				this.cameraCalibration,
+			)),
+			cameraNeutral,
+		);
+		this.referenceNeutral = {
+			space: "CameraRGB",
+			red: referenceNeutral[0][0],
+			green: referenceNeutral[1][0],
+			blue: referenceNeutral[2][0],
+		};
 
-		this.toXYZ_d50 = matrixMultiply(
+		this.cameraWhiteBalancing = matrixInverse(
+			matrixWithDiagonal(
+				[this.referenceNeutral.red, this.referenceNeutral.green, this.referenceNeutral.blue],
+			),
+		);
+
+		this.cameraToXYZ_D50 = matrixMultiply(
 			matrixMultiply(
 				this.forwardMatrix,
-				matrixWithDiagonal(matrixToArray(referenceNeutral)),
+				this.cameraWhiteBalancing,
 			),
-			this.rgbGainInverse,
+			matrixInverse(
+				matrixMultiply(
+					matrixWithDiagonal(this.analogBalance),
+					this.cameraCalibration,
+				),
+			),
 		);
 
 		const colorMatrix1 = readRealRectangles<2>(ifd, "ColorMatrix1", [3, 3]);
@@ -273,7 +326,7 @@ export class WhiteBalance {
 		console.log(illuminant2, "=>", linear2);
 	}
 
-	toRGB(cameraRGB: CameraRGB): CameraRGB {
+	toAsShotRGB(cameraRGB: CameraRGB): CameraRGB {
 		const red = cameraRGB.red / this.asShotNeutral[0];
 		const green = cameraRGB.green / this.asShotNeutral[1];
 		const blue = cameraRGB.blue / this.asShotNeutral[2];
@@ -285,11 +338,8 @@ export class WhiteBalance {
 		};
 	}
 
-	toXYZ(cameraRGB: CameraRGB): XYZ {
-		// ReferenceNeutral = (rgbGain)^-1 * CameraNeutral
-		// toXYZ_D50 = ForwardMatrix * ReferenceNeutral^-1 * (rgbGain)^-1
-		const rgb = this.toRGB(cameraRGB);
-		const product = matrixMultiply(this.toXYZ_d50, [[rgb.red], [rgb.green], [rgb.blue]]);
+	toXYZ_D50(rgb: CameraRGB): XYZ {
+		const product = matrixMultiply(this.cameraToXYZ_D50, [[rgb.red], [rgb.green], [rgb.blue]]);
 		return {
 			space: "XYZ",
 			x: product[0][0],
