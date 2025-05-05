@@ -27,21 +27,14 @@ if (showColorTemperatureTable) {
 	document.body.appendChild(table);
 }
 
-const ms0 = performance.now();
-const dngResponse = await fetch("salt.dng");
-const msResponse = performance.now();
-const msBytes = performance.now();
+const dngResponse = await fetch("vending.dng");
 
 const tiff = tiffEp.parseTIFF_EP(new Uint8Array(await dngResponse.arrayBuffer()));
-
-const msTIFF = performance.now();
 
 const rawIFD = tiff.ifds.findLast(x => {
 	const f = tiffEp.readTag(x, tiff6.TIFF6_TAG_VALUES.NewSubfileType, tiffEp.readInts);
 	return f && f[0] === 0;
 })!;
-
-const msRawIFD = performance.now();
 
 const div = document.createElement("div");
 div.style.position = "relative";
@@ -51,21 +44,26 @@ div.style.height = tiffEp.readTag(rawIFD, tiff6.TIFF6_TAG_VALUES.ImageLength, ti
 document.body.appendChild(div);
 div.style.background = "lime";
 
-console.log(rawIFD);
 const linearizer = new dng.Linearizer(rawIFD);
-console.log(linearizer);
 
 const rggb = new dng.ActiveAreaPattern(linearizer.activeArea, [[0, 1], [1, 2]]);
 
 const demosaic = new mosaic.RGGBMosaic(rggb);
 
-const whiteBalance1 = new color.WhiteBalance(tiff.ifds[0], 1);
-const whiteBalance2 = new color.WhiteBalance(tiff.ifds[0], 2);
+const whiteBalanceCache: Map<number, color.WhiteBalance> = new Map();
+function getWhiteBalance(t: number): color.WhiteBalance {
+	const existing = whiteBalanceCache.get(t);
+	if (existing) {
+		return existing;
+	}
 
-console.log({
-	whiteBalance1,
-	whiteBalance2,
-});
+	const made = new color.WhiteBalance(tiff.ifds[0], t);
+	whiteBalanceCache.set(t, made);
+	return made;
+}
+
+const whiteBalance2900 = getWhiteBalance(2900);
+const whiteBalance6500 = getWhiteBalance(6500);
 
 for (const segment of tiffEp.readImageSegments(rawIFD)) {
 	const linearized = linearizer.linearizeImageSegment(rawIFD, segment);
@@ -82,15 +80,22 @@ for (const segment of tiffEp.readImageSegments(rawIFD)) {
 
 	const colorized = demosaic.demosaic(linearized[0], segment);
 
-	for (let y = 0; y < colorized.length; y++) {
-		for (let x = 0; x < colorized[y].length; x++) {
-			const whiteBalance = x < y
-				? whiteBalance1
-				: whiteBalance2;
+	const height = colorized.length;
+	const width = colorized[0].length;
+	for (let y = 0; y < height; y++) {
+		for (let x = 0; x < width; x++) {
+			let whiteBalance = x < y
+				? whiteBalance2900
+				: whiteBalance6500;
+
+			const p = 0; //x / width;
+			whiteBalance = getWhiteBalance(10 * Math.round(400 + 200 * p));
+
 			const v = colorized[y][x];
 			const xyz = whiteBalance.toXYZ_D50(v);
-			let fill = `color(xyz-d50 ${xyz.x.toFixed(4)} ${xyz.y.toFixed(4)} ${xyz.z.toFixed(4)})`;
-			// let fill = `rgb(${(v.red * 100).toFixed(1)}% ${(v.green * 100).toFixed(1)}% ${(v.blue * 100).toFixed(1)}%)`;
+			const rgb = whiteBalance.toWhiteRGB(v);
+			// let fill = `color(xyz-d50 ${xyz.x.toFixed(4)} ${xyz.y.toFixed(4)} ${xyz.z.toFixed(4)})`;
+			let fill = `rgb(${(rgb.red * 100).toFixed(1)}% ${(rgb.green * 100).toFixed(1)}% ${(rgb.blue * 100).toFixed(1)}%)`;
 			ctx.fillStyle = fill;
 			ctx.fillRect(x, y, 1, 1);
 		}
@@ -100,16 +105,3 @@ for (const segment of tiffEp.readImageSegments(rawIFD)) {
 
 	await new Promise(resolve => requestAnimationFrame(resolve));
 }
-
-const msJPEGs = performance.now();
-
-console.log({ rawIFD });
-
-console.log({
-	ms0,
-	msResponse,
-	msBytes,
-	msTIFF,
-	msRawIFD,
-	msJPEGs,
-});

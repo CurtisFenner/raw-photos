@@ -337,3 +337,20 @@ export function matrixToArray(matrix: number[][]): number[] {
 	}
 	return out;
 }
+
+const product = matrixMultiply(
+	[
+		[1, 2, 3],
+		[4, 5, 6],
+		[7, 8, 9],
+	],
+	[
+		[10, 11, 12],
+		[13, 14, 15],
+		[16, 17, 19],
+	],
+);
+
+if (JSON.stringify(product) !== "[[84,90,99],[201,216,237],[318,342,375]]") {
+	throw new Error("invalid matrixMultiply result");
+}

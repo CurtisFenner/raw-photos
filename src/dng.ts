@@ -604,7 +604,7 @@ function isPositive(x: number) {
 	return x > 0;
 }
 
-const ALL_TAG_VALUES = {
+export const ALL_TAG_VALUES = {
 	...DNG_TAG_VALUES,
 	...TIFF6_TAG_VALUES,
 };

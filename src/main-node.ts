@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { FIELD_TYPES, parseTIFF_EP, readASCII, readImageSegments, readInts, readReals, readTag } from "./tiff-ep.js";
+import { FIELD_TYPES, parseTIFF_EP, readASCII, readInts, readReals, readTag } from "./tiff-ep.js";
 import { DNG_TAGS } from "./dng.js";
 import { TIFF6_TAG_VALUES, TIFF6_TAGS } from "./tiff6.js";
 
