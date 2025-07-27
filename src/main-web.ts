@@ -80,8 +80,8 @@ for (const segment of tiffEp.readImageSegments(rawIFD)) {
 
 	const colorized = demosaic.demosaic(linearized[0], segment);
 
-	const height = colorized.length;
-	const width = colorized[0].length;
+	const height = colorized.height;
+	const width = colorized.width;
 	for (let y = 0; y < height; y++) {
 		for (let x = 0; x < width; x++) {
 			let whiteBalance = x < y
@@ -91,7 +91,7 @@ for (const segment of tiffEp.readImageSegments(rawIFD)) {
 			const p = 0; //x / width;
 			whiteBalance = getWhiteBalance(10 * Math.round(400 + 200 * p));
 
-			const v = colorized[y][x];
+			const v = colorized.getPixel(y, x);
 			const xyz = whiteBalance.toXYZ_D50(v);
 			const rgb = whiteBalance.toWhiteRGB(v);
 			// let fill = `color(xyz-d50 ${xyz.x.toFixed(4)} ${xyz.y.toFixed(4)} ${xyz.z.toFixed(4)})`;

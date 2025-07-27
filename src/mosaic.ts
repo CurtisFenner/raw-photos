@@ -8,6 +8,40 @@ export const CFA_COLORS = {
 	blue: new Set([2, 3, 4, 6]),
 };
 
+/**
+ * Represents a sequence of `CameraRGB` values, in RGB order.
+ */
+export type CameraRGBSlice = Float32Array & { __brand: "CameraRGBSlice" };
+
+class CameraRGBRect {
+	constructor(
+		public readonly data: CameraRGBSlice,
+		public readonly width: number,
+		public readonly height: number,
+	) { }
+
+	sliceOfRow(p: { row: number, left: number, width: number }): CameraRGBSlice {
+		const start = p.row * this.width + p.left;
+		const end = start + p.width;
+		return this.data.slice(3 * start, 3 * end) as CameraRGBSlice;
+	}
+
+	static allocate(size: { width: number, height: number }) {
+		const data = new Float32Array(3 * size.width * size.height);
+		return new CameraRGBRect(data as CameraRGBSlice, size.width, size.height);
+	}
+
+	getPixel(r: number, c: number): CameraRGB {
+		const i = (r * this.width + c) * 3;
+		return {
+			space: "CameraRGB",
+			red: this.data[i + 0],
+			green: this.data[i + 1],
+			blue: this.data[i + 2],
+		};
+	}
+}
+
 export class RGGBMosaic {
 	constructor(
 		private readonly pattern: ActiveAreaPattern,
@@ -17,44 +51,7 @@ export class RGGBMosaic {
 		}
 	}
 
-	demosaicPattern(pr: number, pc: number, get: (dr: number, dc: number) => number): CameraRGB {
-		if (pr === 0 && pc === 0) {
-			// Red
-			const red = get(0, 0);
-			const green = (get(-1, 0) + get(1, 0) + get(0, -1) + get(0, 1)) / 4;
-			const blue = (get(-1, -1) + get(-1, 1) + get(1, -1) + get(1, 1)) / 4;
-			return {
-				space: "CameraRGB",
-				red,
-				green,
-				blue,
-			};
-		} else if (pr === 1 && pc === 1) {
-			// Blue
-			const blue = get(0, 0);
-			const green = (get(-1, 0) + get(1, 0) + get(0, -1) + get(0, 1)) / 4;
-			const red = (get(-1, -1) + get(-1, 1) + get(1, -1) + get(1, 1)) / 4;
-			return {
-				space: "CameraRGB",
-				red,
-				green,
-				blue,
-			};
-		} else {
-			// Green
-			const green = get(0, 0);
-			const blue = (get(pc, pr) + get(-pc, -pr)) / 2;
-			const red = (get(pr, pc) + get(-pr, -pc)) / 2;
-			return {
-				space: "CameraRGB",
-				red,
-				green,
-				blue,
-			};
-		}
-	}
-
-	demosaic(array: number[][], topLeft: { x0: number, y0: number }): CameraRGB[][] {
+	demosaic(array: number[][], topLeft: { x0: number, y0: number }): CameraRGBRect {
 		const patternHeight = this.pattern.patternHeight;
 		const patternWidth = this.pattern.patternWidth;
 		if (array.length % patternHeight !== 0 || array[0].length % patternWidth !== 0) {
@@ -65,38 +62,40 @@ export class RGGBMosaic {
 			throw new Error("array must be aligned with CFAPattern size");
 		}
 
-		const out: CameraRGB[][] = [];
-		for (let pr = 0; pr < patternHeight; pr++) {
-			for (let pc = 0; pc < patternWidth; pc++) {
-				for (let br = 0; br * patternHeight < array.length; br++) {
-					for (let bc = 0; bc * patternWidth < array[0].length; bc++) {
-						const ar = br * patternHeight + pr;
-						out[ar] = out[ar] || [];
-						const ac = bc * patternWidth + pc;
-						out[ar][ac] = this.demosaicPattern(
-							pr,
-							pc,
-							(dr, dc) => {
-								let tr = ar + dr;
-								if (tr < 0) {
-									tr = mod(tr, patternHeight);
-								}
-								while (tr >= array.length) {
-									tr -= patternHeight;
-								}
+		const out = CameraRGBRect.allocate({ width: array[0].length, height: array.length });
+		const height = array.length;
+		const width = array[0].length;
 
-								let tc = ac + dc;
-								if (tc < 0) {
-									tc = mod(tc, patternWidth);
-								}
-								while (tc >= array[0].length) {
-									tc -= patternWidth;
-								}
-								return array[tr][tc];
-							},
-						);
-					}
-				}
+		for (let r = 0; r < height; r += 2) {
+			for (let c = 0; c < width; c += 2) {
+				const red00 = array[r][c];
+				const green01 = array[r][c + 1];
+				const green10 = array[r + 1][c];
+				const blue11 = array[r + 1][c + 1];
+
+				const i_0 = (width * r + c) * 3;
+				// const i_m1 = i_0 - 3 * width;
+				const i_1 = i_0 + 3 * width;
+
+				// [0, 0] RGB
+				out.data[i_0 + 0] = red00;
+				out.data[i_0 + 1] = (green01 + green10) / 2;
+				out.data[i_0 + 2] = blue11;
+
+				// [0, 1] RGB
+				out.data[i_0 + 3] = red00;
+				out.data[i_0 + 4] = green01;
+				out.data[i_0 + 5] = blue11;
+
+				// [1, 0] RGB
+				out.data[i_1 + 0] = red00;
+				out.data[i_1 + 1] = green10;
+				out.data[i_1 + 2] = blue11;
+
+				// [1, 1] RGB
+				out.data[i_1 + 3] = red00;
+				out.data[i_1 + 4] = (green01 + green10) / 2;
+				out.data[i_1 + 5] = blue11;
 			}
 		}
 
