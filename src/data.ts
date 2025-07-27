@@ -1,4 +1,4 @@
-import { assert } from "./test.js";
+import { assert } from "../test/test.js";
 
 export class ScannerError extends Error {
 	constructor(public errorMessage: string) {

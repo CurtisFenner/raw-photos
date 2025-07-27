@@ -1,6 +1,7 @@
 import { diagonalMatrix as matrixWithDiagonal, matrixInverse, matrixMultiply, matrixToArray } from "./data.js";
 import * as dng from "./dng.js";
 import { ImageFileDirectory } from "./tiff-ep.js";
+import * as culori from "culori";
 
 export type XYZ = {
 	space: "XYZ",
@@ -26,6 +27,40 @@ export type CameraRGB = {
 	green: number,
 	blue: number,
 };
+
+/**
+ * Represents a sequence of `CameraRGB` values, in RGB order.
+ */
+export type CameraRGBSlice = Float32Array & { __brand: "CameraRGBSlice" };
+
+export class CameraRGBRect {
+	constructor(
+		public readonly data: CameraRGBSlice,
+		public readonly width: number,
+		public readonly height: number,
+	) { }
+
+	sliceOfRow(p: { row: number, left: number, width: number }): CameraRGBSlice {
+		const start = p.row * this.width + p.left;
+		const end = start + p.width;
+		return this.data.slice(3 * start, 3 * end) as CameraRGBSlice;
+	}
+
+	static allocate(size: { width: number, height: number }) {
+		const data = new Float32Array(3 * size.width * size.height);
+		return new CameraRGBRect(data as CameraRGBSlice, size.width, size.height);
+	}
+
+	getPixel(r: number, c: number): CameraRGB {
+		const i = (r * this.width + c) * 3;
+		return {
+			space: "CameraRGB",
+			red: this.data[i + 0],
+			green: this.data[i + 1],
+			blue: this.data[i + 2],
+		};
+	}
+}
 
 export type LMS = {
 	space: "lms",
@@ -335,6 +370,9 @@ export class WhiteBalance {
 		if (!illuminant1 || !illuminant2) {
 			throw new Error("unrecognized standard illuminants");
 		}
+
+		console.log({ illuminant1, illuminant2 });
+
 		const linear1 = matrixMultiply(
 			matrixInverse(colorMatrix1),
 			[[illuminant1.tri.x], [illuminant1.tri.y], [illuminant1.tri.z]],
@@ -376,5 +414,37 @@ export class WhiteBalance {
 			y: product[1][0],
 			z: product[2][0],
 		};
+	}
+
+	rectangleToXYZ_D50_SRGB(rawRGB: CameraRGBRect): ImageData {
+		const imageData = new ImageData(rawRGB.width, rawRGB.height, {
+			colorSpace: "srgb",
+		});
+
+		let i = 0;
+		let o = 0;
+		for (let r = 0; r < rawRGB.height; r++) {
+			for (let c = 0; c < rawRGB.width; c++) {
+				const xyz = this.toXYZ_D50({
+					space: "CameraRGB",
+					red: rawRGB.data[i + 0],
+					green: rawRGB.data[i + 1],
+					blue: rawRGB.data[i + 2],
+				});
+				i += 3;
+
+				const sRGB = culori.convertXyz50ToRgb(xyz);
+
+				// RGBA order
+				// TODO: dither to increase color precision
+				imageData.data[o + 0] = 255 * sRGB.r;
+				imageData.data[o + 1] = 255 * sRGB.g;
+				imageData.data[o + 2] = 255 * sRGB.b;
+				imageData.data[o + 3] = 255;
+				o += 4;
+			}
+		}
+
+		return imageData;
 	}
 }

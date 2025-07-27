@@ -1,5 +1,4 @@
-import { CameraRGB } from "./color.js";
-import { mod } from "./data.js";
+import { CameraRGBRect } from "./color.js";
 import type { ActiveAreaPattern } from "./dng.js";
 
 export const CFA_COLORS = {
@@ -7,40 +6,6 @@ export const CFA_COLORS = {
 	green: new Set([1, 3, 5, 6]),
 	blue: new Set([2, 3, 4, 6]),
 };
-
-/**
- * Represents a sequence of `CameraRGB` values, in RGB order.
- */
-export type CameraRGBSlice = Float32Array & { __brand: "CameraRGBSlice" };
-
-class CameraRGBRect {
-	constructor(
-		public readonly data: CameraRGBSlice,
-		public readonly width: number,
-		public readonly height: number,
-	) { }
-
-	sliceOfRow(p: { row: number, left: number, width: number }): CameraRGBSlice {
-		const start = p.row * this.width + p.left;
-		const end = start + p.width;
-		return this.data.slice(3 * start, 3 * end) as CameraRGBSlice;
-	}
-
-	static allocate(size: { width: number, height: number }) {
-		const data = new Float32Array(3 * size.width * size.height);
-		return new CameraRGBRect(data as CameraRGBSlice, size.width, size.height);
-	}
-
-	getPixel(r: number, c: number): CameraRGB {
-		const i = (r * this.width + c) * 3;
-		return {
-			space: "CameraRGB",
-			red: this.data[i + 0],
-			green: this.data[i + 1],
-			blue: this.data[i + 2],
-		};
-	}
-}
 
 export class RGGBMosaic {
 	constructor(

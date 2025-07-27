@@ -1,4 +1,11 @@
 <!DOCTYPE html>
 
 <body>
-<script src="dist/main-web.js" type="module"></script>
+	<script type="importmap">
+		{
+			"imports": {
+				"culori": "./node_modules/culori/bundled/culori.mjs"
+			}
+		}
+	</script>
+<script src="dist/src/main-web.js" type="module"></script>

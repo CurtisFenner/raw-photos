@@ -3,8 +3,8 @@
 		"strict": true,
 		"outDir": "dist",
 		"target": "ESNext",
-		"module": "NodeNext",
-		"moduleResolution": "nodenext",
-		"sourceMap": true
+		"module": "esnext",
+		"sourceMap": true,
+		"skipLibCheck": true,
 	}
 }

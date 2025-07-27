@@ -28,7 +28,7 @@ if (showColorTemperatureTable) {
 	document.body.appendChild(table);
 }
 
-const dngResponse = await fetch("vending.dng");
+const dngResponse = await fetch("parking.dng");
 
 const tiff = tiffEp.parseTIFF_EP(new Uint8Array(await dngResponse.arrayBuffer()));
 
@@ -52,14 +52,14 @@ const rggb = new dng.ActiveAreaPattern(linearizer.activeArea, [[0, 1], [1, 2]]);
 const demosaic = new mosaic.RGGBMosaic(rggb);
 
 const whiteBalanceCache: Map<number, color.WhiteBalance> = new Map();
-function getWhiteBalance(t: number): color.WhiteBalance {
-	const existing = whiteBalanceCache.get(t);
+function getWhiteBalance(temperatureKelvin: number): color.WhiteBalance {
+	const existing = whiteBalanceCache.get(temperatureKelvin);
 	if (existing) {
 		return existing;
 	}
 
-	const made = new color.WhiteBalance(tiff.ifds[0], t);
-	whiteBalanceCache.set(t, made);
+	const made = new color.WhiteBalance(tiff.ifds[0], temperatureKelvin);
+	whiteBalanceCache.set(temperatureKelvin, made);
 	return made;
 }
 
@@ -67,7 +67,11 @@ const whiteBalance2900 = getWhiteBalance(2900);
 const whiteBalance6500 = getWhiteBalance(6500);
 
 for (const segment of tiffEp.readImageSegments(rawIFD)) {
+	const segmentLabel = `segment ${segment.x1 - segment.x0}x${segment.y1 - segment.y0}`;
+	console.time(segmentLabel);
+	console.time("linearizeImageSegment");
 	const linearized = linearizer.linearizeImageSegment(rawIFD, segment);
+	console.timeEnd("linearizeImageSegment");
 
 	const canvas = document.createElement("canvas");
 	canvas.width = segment.x1 - segment.x0;
@@ -79,28 +83,28 @@ for (const segment of tiffEp.readImageSegments(rawIFD)) {
 	canvas.style.imageRendering = "pixelated";
 	const ctx = canvas.getContext("2d")!;
 
+	console.time("demosaic");
 	const colorized = demosaic.demosaic(linearized[0], segment);
+	console.timeEnd("demosaic");
 
-	const height = colorized.height;
-	const width = colorized.width;
-	for (let y = 0; y < height; y++) {
-		for (let x = 0; x < width; x++) {
-			let whiteBalance = x < y
-				? whiteBalance2900
-				: whiteBalance6500;
+	console.time("render");
 
-			const p = 0; //x / width;
-			whiteBalance = getWhiteBalance(10 * Math.round(400 + 200 * p));
+	const whiteBalance = segment.y0 > segment.x0
+		? whiteBalance2900
+		: whiteBalance6500;
 
-			const v = colorized.getPixel(y, x);
-			const xyz = whiteBalance.toXYZ_D50(v);
-			const rgb = whiteBalance.toWhiteRGB(v);
-			// let fill = `color(xyz-d50 ${xyz.x.toFixed(4)} ${xyz.y.toFixed(4)} ${xyz.z.toFixed(4)})`;
-			let fill = `rgb(${(rgb.red * 100).toFixed(1)}% ${(rgb.green * 100).toFixed(1)}% ${(rgb.blue * 100).toFixed(1)}%)`;
-			ctx.fillStyle = fill;
-			ctx.fillRect(x, y, 1, 1);
-		}
-	}
+	console.time("rectangleToXYZ_D50_SRGB");
+	const imageData = whiteBalance.rectangleToXYZ_D50_SRGB(colorized);
+	console.timeEnd("rectangleToXYZ_D50_SRGB");
+
+	console.time("putImageData");
+	ctx.putImageData(imageData, 0, 0);
+	console.timeEnd("putImageData");
+
+	console.timeEnd("render");
+
+	console.timeEnd(segmentLabel);
+	console.log(whiteBalance.temperatureK);
 
 	div.appendChild(canvas);
 

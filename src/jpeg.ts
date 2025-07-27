@@ -1,5 +1,5 @@
 import { BitStream, Scanner, U16, U8 } from "./data.js";
-import { assert } from "./test.js";
+import { assert } from "../test/test.js";
 
 export class JPEGError extends Error {
 	constructor(message: string) {
