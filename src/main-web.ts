@@ -1,8 +1,9 @@
+import * as color from "./color.js";
+import { Linearizer } from "./dng-linear-reference.js";
 import * as dng from "./dng.js";
+import * as mosaic from "./mosaic.js";
 import * as tiffEp from "./tiff-ep.js";
 import * as tiff6 from "./tiff6.js";
-import * as color from "./color.js";
-import * as mosaic from "./mosaic.js";
 
 const showColorTemperatureTable = false;
 if (showColorTemperatureTable) {
@@ -44,7 +45,7 @@ div.style.height = tiffEp.readTag(rawIFD, tiff6.TIFF6_TAG_VALUES.ImageLength, ti
 document.body.appendChild(div);
 div.style.background = "lime";
 
-const linearizer = new dng.Linearizer(rawIFD);
+const linearizer = new Linearizer(rawIFD);
 
 const rggb = new dng.ActiveAreaPattern(linearizer.activeArea, [[0, 1], [1, 2]]);
 
