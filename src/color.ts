@@ -1,7 +1,7 @@
-import { diagonalMatrix as matrixWithDiagonal, matrixInverse, matrixMultiply, matrixToArray } from "./data.js";
+import * as culori from "culori";
+import { matrixInverse, matrixMultiply, diagonalMatrix as matrixWithDiagonal } from "./data.js";
 import * as dng from "./dng.js";
 import { ImageFileDirectory } from "./tiff-ep.js";
-import * as culori from "culori";
 
 export type XYZ = {
 	space: "XYZ",
@@ -267,7 +267,14 @@ export class WhiteBalance {
 	 */
 	private cameraToXYZ_D50: number[][];
 
-	constructor(ifd: ImageFileDirectory, public readonly temperatureK: number) {
+	public readonly temperatureK: number;
+
+	constructor(ifd: ImageFileDirectory, options: {
+		temperatureK: number,
+		ignoreCC?: boolean,
+	}) {
+		this.temperatureK = options.temperatureK;
+
 		this.asShotNeutral = dng.readRealsTagExpectingSize(ifd, "AsShotNeutral", 3);
 
 		const calibrationIlluminant1 = dng.readRealsTagExpectingSize(ifd, "CalibrationIlluminant1", 1)[0];
@@ -281,9 +288,8 @@ export class WhiteBalance {
 			throw new Error(`unsupported calibration illuminant ${calibrationIlluminant2}`);
 		}
 
-		const alpha = ((1 / temperatureK) - (1 / calibrationData2.temperatureK)) / ((1 / calibrationData1.temperatureK) - (1 / calibrationData2.temperatureK));
-
-		function weighted(name: keyof typeof dng.ALL_TAG_VALUES & `${string}1`): number[][] {
+		const alpha = ((1 / this.temperatureK) - (1 / calibrationData2.temperatureK)) / ((1 / calibrationData1.temperatureK) - (1 / calibrationData2.temperatureK));
+		function weighted3x3(name: keyof typeof dng.ALL_TAG_VALUES & `${string}1`): number[][] {
 			const m1 = dng.readRealRectangles<2>(ifd, name, [3, 3]);
 			const m2 = dng.readRealRectangles<2>(ifd, name.replace(/1$/, "2") as keyof typeof dng.ALL_TAG_VALUES, [3, 3]);
 			const out: number[][] = [];
@@ -297,17 +303,21 @@ export class WhiteBalance {
 		}
 
 		// XYZ -> Reference CameraRGB (under illuminant)
-		this.colorMatrix = weighted("ColorMatrix1");
+		this.colorMatrix = weighted3x3("ColorMatrix1");
 
 		// White-balanced CameraRGB -> XYZ_D50
-		this.forwardMatrix = weighted("ForwardMatrix1")
+		this.forwardMatrix = weighted3x3("ForwardMatrix1")
 
 		// Reference CameraRGB -> This CameraRGB (under illuminant)
-		this.cameraCalibration = weighted("CameraCalibration1");
+		// TODO: The CameraCalibration matrix should be replaced by the identity
+		//       matrix in some situations.
+		this.cameraCalibration = options.ignoreCC
+			? [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+			: weighted3x3("CameraCalibration1");
 
 		this.analogBalance = dng.readRealsTagExpectingSize(ifd, "AnalogBalance", 3, { default: 1 });
 
-		this.xyzNeutral = daylightXYZ(temperatureK, 1);
+		this.xyzNeutral = daylightXYZ(this.temperatureK, 1);
 
 		this.xyzToCamera = matrixMultiply(
 			matrixWithDiagonal(this.analogBalance),
@@ -328,11 +338,14 @@ export class WhiteBalance {
 			blue: cameraNeutral[2][0],
 		};
 
+		// "ReferenceNeutral = Inverse (AB * CC) * CameraNeutral"
 		const referenceNeutral = matrixMultiply(
-			matrixInverse(matrixMultiply(
-				matrixWithDiagonal(this.analogBalance),
-				this.cameraCalibration,
-			)),
+			matrixInverse(
+				matrixMultiply(
+					matrixWithDiagonal(this.analogBalance),
+					this.cameraCalibration,
+				),
+			),
 			cameraNeutral,
 		);
 		this.referenceNeutral = {
@@ -342,12 +355,18 @@ export class WhiteBalance {
 			blue: referenceNeutral[2][0],
 		};
 
+		// "D = Invert (AsDiagonalMatrix (ReferenceNeutral))"
 		this.cameraWhiteBalancing = matrixInverse(
 			matrixWithDiagonal(
 				[this.referenceNeutral.red, this.referenceNeutral.green, this.referenceNeutral.blue],
 			),
 		);
 
+		// From pg 103 of the DNG 1.7.1.0 spec:
+		// "If the ForwardMatrix tags are included in the camera profile"
+		// "ReferenceNeutral = Inverse (AB * CC) * CameraNeutral"
+		// "D = Invert (AsDiagonalMatrix (ReferenceNeutral))"
+		// "CameraToXYZ_D50 = FM * D * Inverse (AB * CC)"
 		this.cameraToXYZ_D50 = matrixMultiply(
 			matrixMultiply(
 				this.forwardMatrix,
@@ -360,50 +379,6 @@ export class WhiteBalance {
 				),
 			),
 		);
-
-		const colorMatrix1 = dng.readRealRectangles<2>(ifd, "ColorMatrix1", [3, 3]);
-		const illuminantID1 = dng.readRealsTagExpectingSize(ifd, "CalibrationIlluminant1", 1)[0];
-		const illuminant1 = STANDARD_ILLUMINANTS[illuminantID1];
-		const colorMatrix2 = dng.readRealRectangles<2>(ifd, "ColorMatrix2", [3, 3]);
-		const illuminantID2 = dng.readRealsTagExpectingSize(ifd, "CalibrationIlluminant2", 1)[0];
-		const illuminant2 = STANDARD_ILLUMINANTS[illuminantID2];
-		if (!illuminant1 || !illuminant2) {
-			throw new Error("unrecognized standard illuminants");
-		}
-
-		console.log({ illuminant1, illuminant2 });
-
-		const linear1 = matrixMultiply(
-			matrixInverse(colorMatrix1),
-			[[illuminant1.tri.x], [illuminant1.tri.y], [illuminant1.tri.z]],
-		);
-		const linear2 = matrixMultiply(
-			matrixInverse(colorMatrix2),
-			[[illuminant2.tri.x], [illuminant2.tri.y], [illuminant2.tri.z]],
-		);
-
-		const outNeutral = this.toXYZ_D50(this.cameraNeutral);
-	}
-
-	toWhiteRGB(cameraRGB: CameraRGB): CameraRGB {
-		return {
-			space: "CameraRGB",
-			red: cameraRGB.red / this.referenceNeutral.red,
-			green: cameraRGB.green / this.referenceNeutral.green,
-			blue: cameraRGB.blue / this.referenceNeutral.blue,
-		};
-	}
-
-	toAsShotRGB(cameraRGB: CameraRGB): CameraRGB {
-		const red = cameraRGB.red / this.asShotNeutral[0];
-		const green = cameraRGB.green / this.asShotNeutral[1];
-		const blue = cameraRGB.blue / this.asShotNeutral[2];
-		return {
-			space: "CameraRGB",
-			red,
-			green,
-			blue,
-		};
 	}
 
 	toXYZ_D50(rgb: CameraRGB): XYZ {

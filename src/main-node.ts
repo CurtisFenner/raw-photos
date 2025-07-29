@@ -3,7 +3,7 @@ import { FIELD_TYPES, parseTIFF_EP, readASCII, readInts, readReals, readTag } fr
 import { DNG_TAGS } from "./dng.js";
 import { TIFF6_TAG_VALUES, TIFF6_TAGS } from "./tiff6.js";
 
-const dng = fs.readFileSync("vending.dng");
+const dng = fs.readFileSync(process.argv[2] || "concrete.dng");
 
 const out = parseTIFF_EP(dng);
 console.log("problems:", out.problems);
