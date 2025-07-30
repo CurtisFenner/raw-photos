@@ -119,11 +119,11 @@ for (const segment of tiffEp.readImageSegments(rawIFD)) {
 
 		console.timeEnd("render");
 
-		console.timeEnd(segmentLabel);
-		console.log(whiteBalance);
 
 		div.appendChild(canvas);
 	}
+
+	console.timeEnd(segmentLabel);
 
 	await new Promise(resolve => requestAnimationFrame(resolve));
 }

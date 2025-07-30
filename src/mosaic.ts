@@ -38,29 +38,46 @@ export class RGGBMosaic {
 				const green10 = array[r + 1][c];
 				const blue11 = array[r + 1][c + 1];
 
-				const i_0 = (width * r + c) * 3;
-				// const i_m1 = i_0 - 3 * width;
-				const i_1 = i_0 + 3 * width;
+				const cRight = c + 2 < width ? c + 2 : c;
+				const cLeft = c > 0 ? c - 1 : c + 1;
+				const rUp = r > 0 ? r - 1 : r + 1;
+				const rDown = r + 2 < height ? r + 2 : r;
 
-				// [0, 0] RGB
-				out.data[i_0 + 0] = red00;
-				out.data[i_0 + 1] = (green01 + green10) / 2;
-				out.data[i_0 + 2] = blue11;
+				const greenLeft = array[r][cLeft];
+				const greenUp = array[rUp][c];
+				const greenRight = array[r + 1][cRight];
+				const greenDown = array[rDown][c + 1];
+				const redRight = array[r][cRight];
+				const redDown = array[rDown][c];
+				const redDownRight = array[rDown][cRight];
+				const blueUp = array[rUp][c + 1];
+				const blueLeft = array[r + 1][cLeft];
+				const blueUpLeft = array[rUp][cLeft];
 
-				// [0, 1] RGB
-				out.data[i_0 + 3] = red00;
-				out.data[i_0 + 4] = green01;
-				out.data[i_0 + 5] = blue11;
+				const i_00 = (width * r + c) * 3;
+				// const i_m1 = i_00 - 3 * width;
+				const i_10 = i_00 + 3 * width;
+				const i_11 = i_10 + 3;
 
-				// [1, 0] RGB
-				out.data[i_1 + 0] = red00;
-				out.data[i_1 + 1] = green10;
-				out.data[i_1 + 2] = blue11;
+				// [0, 0] RGB (red)
+				out.data[i_00 + 0] = red00;
+				out.data[i_00 + 1] = (greenLeft + greenUp + green01 + green10) / 4;
+				out.data[i_00 + 2] = (blue11 + blueLeft + blueUpLeft + blueUp) / 4;
 
-				// [1, 1] RGB
-				out.data[i_1 + 3] = red00;
-				out.data[i_1 + 4] = (green01 + green10) / 2;
-				out.data[i_1 + 5] = blue11;
+				// [0, 1] RGB (green)
+				out.data[i_00 + 3] = (red00 + redRight) / 2;
+				out.data[i_00 + 4] = green01;
+				out.data[i_00 + 5] = (blue11 + blueUp) / 2;
+
+				// [1, 0] RGB (green)
+				out.data[i_10 + 0] = (red00 + redDown) / 2;
+				out.data[i_10 + 1] = green10;
+				out.data[i_10 + 2] = (blue11 + blueLeft) / 2;
+
+				// [1, 1] RGB (blue)
+				out.data[i_11 + 0] = (red00 + redRight + redDown + redDownRight) / 4;
+				out.data[i_11 + 1] = (greenRight + greenDown + green01 + green10) / 4;
+				out.data[i_11 + 2] = blue11;
 			}
 		}
 
