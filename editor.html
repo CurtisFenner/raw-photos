@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+	<meta charset="utf-8">
+	<link rel="preload" href="/Lexend/Lexend-VariableFont_wght.ttf" as="font" type="font/ttf" crossorigin>
+	<link rel="stylesheet" href="editor.css" >
+<body>
+
+	<div style="display: flex; flex-direction: column; position: fixed; left: 0; top: 0; right: 0; bottom: 0;">
+		<div id="menu-div">
+			<div class="menu-file-line">
+				<input type="file" value="Lol" accept="image/DNG,.dng,.tiff"> <samp id="menu-filename-span"></span>
+			</div>
+		</div>
+		<form id="menu-tabs" class="tabbed" style="flex-grow: 1;">
+			<input id="active-tab-about" type="radio" name="active-tab" checked>
+			<label for="active-tab-about">About this web app</label>
+			<div class="tab" style="padding: 1em;">
+				<h1>About this web app</h1>
+				<p>
+					Hi, I'm Curtis Fenner. I made this web app because I was curious
+					about how "raw" photo formats work, and the process that
+					computers use to turn a digital camera's sensor data into a
+					viewable image.
+			</div>
+
+			<input id="active-tab-image" type="radio" name="active-tab">
+			<label for="active-tab-image">View image</label>
+			<div class="tab" style="padding: 1em;">
+				<h1>View your beautiful image</h1>
+			</div>
+
+			<input id="active-tab-tags" type="radio" name="active-tab">
+			<label for="active-tab-tags">DNG Tags</label>
+			<div class="tab" style="padding: 1em;">
+				<h1>View your beautiful tags</h1>
+			</div>
+		</form>
+	</div>

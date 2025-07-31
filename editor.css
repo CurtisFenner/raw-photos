@@ -1,0 +1,83 @@
+@font-face {
+	font-family: Lexend;
+	font-style: normal;
+	font-weight: 1 1000;
+	src: url(/Lexend/Lexend-VariableFont_wght.ttf)
+}
+
+body, input, html, textarea {
+	font-family: Lexend, sans-serif;
+}
+
+body {
+	font-size: 14px;
+
+	--active-tab-bg: #EEE;
+	--inactive-tab-bg: #CCC;
+}
+
+input, textarea {
+	font-size: 1em;
+}
+
+/* Pure CSS tabs */
+.tabbed {
+	position: relative;
+	padding: 0;
+	--tab-height: 1.5em;
+	--tab-border-color: black;
+}
+
+.tabbed::before {
+	z-index: -1;
+	position: absolute;
+	/* margin-top: -1px; */
+	top: var(--tab-height);
+	left: 0;
+	right: 0;
+	height: 1px;
+	background: var(--tab-border-color);
+	content: " ";
+}
+
+.tabbed > input[type=radio] {
+	position: absolute;
+	pointer-events: none;
+	opacity: 0;
+}
+
+.tabbed > label {
+	padding: 0 0.25em 0 0.25em;
+	display: inline-block;
+	height: var(--tab-height);
+	line-height: var(--tab-height);
+	border-radius: 0.5em 0.5em 0 0;
+	border: 1px solid;
+	border-color: var(--tab-border-color);
+	margin-top: -1px;
+	margin-left: 0.25em;
+
+	background-color: var(--inactive-tab-bg);
+}
+
+.tabbed > input[type=radio]:checked + label {
+	text-shadow: 1px 0 0 currentColor;
+	background-color: var(--active-tab-bg);
+	border-bottom-color: var(--active-tab-bg);
+}
+
+.tabbed > .tab {
+	position: absolute;
+	margin-top: 1px;
+	top: var(--tab-height);
+	left: 0;
+	right: 0;
+	bottom: 0;
+
+	display: none;
+}
+
+.tabbed > input[type=radio]:checked + label + .tab {
+	display: block;
+	background: var(--active-tab-bg);
+}

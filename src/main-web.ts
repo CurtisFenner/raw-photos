@@ -66,6 +66,27 @@ function getWhiteBalance(temperatureKelvin: number): color.WhiteBalance {
 	return made;
 }
 
+class Pauser {
+	private lastPause = performance.now();
+
+	constructor(
+		private maxPauseMs: number
+	) { }
+
+	async pause() {
+		const elapsed = performance.now() - this.lastPause;
+		if (elapsed < this.maxPauseMs) {
+			return false;
+		}
+
+		await new Promise(resolve => requestAnimationFrame(resolve));
+		this.lastPause = performance.now();
+		return true;
+	}
+}
+
+const pauser = new Pauser(80);
+
 for (const segment of tiffEp.readImageSegments(rawIFD)) {
 	const segmentLabel = `segment ${segment.x1 - segment.x0}x${segment.y1 - segment.y0}`;
 	console.time(segmentLabel);
@@ -101,23 +122,14 @@ for (const segment of tiffEp.readImageSegments(rawIFD)) {
 		canvas.style.imageRendering = "pixelated";
 		const ctx = canvas.getContext("2d")!;
 
-		console.time("demosaic");
 		const colorized = demosaic.demosaic(linearized[0], segment);
-		console.timeEnd("demosaic");
 
-		console.time("render");
 
 		const whiteBalance = getWhiteBalance(6500);
 
-		console.time("rectangleToXYZ_D50_SRGB");
 		const imageData = whiteBalance.rectangleToXYZ_D50_SRGB(colorized);
-		console.timeEnd("rectangleToXYZ_D50_SRGB");
 
-		console.time("putImageData");
 		ctx.putImageData(imageData, 0, 0);
-		console.timeEnd("putImageData");
-
-		console.timeEnd("render");
 
 
 		div.appendChild(canvas);
@@ -125,7 +137,7 @@ for (const segment of tiffEp.readImageSegments(rawIFD)) {
 
 	console.timeEnd(segmentLabel);
 
-	await new Promise(resolve => requestAnimationFrame(resolve));
+	await pauser.pause();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
