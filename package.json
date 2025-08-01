@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"scripts": {
-		"go": "node --enable-source-maps dist/main-node.js",
+		"build": "tsc",
 		"serve": "npx http-server"
 	},
 	"dependencies": {
