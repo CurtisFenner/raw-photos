@@ -310,7 +310,7 @@ export function parseTIFF_EP(
 
 	}
 
-	if (ifds.length > 9_000) {
+	if (ifds.length > 100) {
 		problems.push("too many IFDs!");
 	}
 
