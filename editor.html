@@ -1,15 +1,17 @@
 <!doctype html>
 <html>
-	<meta charset="utf-8">
-	<link rel="preload" href="/Lexend/Lexend-VariableFont_wght.ttf" as="font" type="font/ttf" crossorigin>
-	<link rel="stylesheet" href="editor.css" >
+<meta charset="utf-8">
+<link rel="preload" href="/Lexend/Lexend-VariableFont_wght.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="editor.css">
+
 <body>
 
 	<div id="editor-div"
 		style="display: flex; flex-direction: column; position: fixed; left: 0; top: 0; right: 0; bottom: 0;">
 		<div id="menu-div" style="padding-left: 0.75em; line-height: 3em; height: 3em; margin-bottom: 1px;">
 			<div class="menu-file-line">
-				<input disabled id="input-dng" type="file" accept="image/DNG,.dng,.tiff"> <samp id="menu-filename-span"></span>
+				<input disabled id="input-dng" type="file" accept="image/DNG,.dng,.tiff"> <samp
+					id="menu-filename-span"></span>
 			</div>
 		</div>
 		<form id="menu-tabs" class="tabbed" style="flex-grow: 1;">
@@ -26,8 +28,30 @@
 
 			<input id="active-tab-image" type="radio" name="active-tab">
 			<label for="active-tab-image">View image</label>
-			<div id="tab-image-div" class="tab" style="padding: 1em;">
-				<h1>View your beautiful image</h1>
+			<div id="tab-image-div" class="tab">
+				<div style="display: flex; flex-direction: column;  position: absolute; left: 0; right: 0; top: 0; bottom: 0;">
+					<div id="image-menu-div" style="height: 3em; padding: 1em;">
+						<label>
+							Demosaic:
+							<select id="menu-demosaic-select">
+								<option value="rggb-linear">RGGB: Linear</option>
+								<option value="no-demosaic">No demosaic (grayscale)</option>
+								<option value="pixelate">Pixelate</option>
+								<option value="pixelate-punch">Pixelate "Punch"</option>
+							</select>
+						</label>
+
+						<label>
+							White-Balance:
+							<select id="menu-demosaic-select">
+								<option value="as-shot-neutral">AsShotNeutral (Camera Space)</option>
+								<option value="none">None (Camera Space)</option>
+							</select>
+						</label>
+					</div>
+					<div id="image-preview-div" class="hero-graph-paper" style="flex-grow: 1; padding: 1em; overflow: scroll;">
+					</div>
+				</div>
 			</div>
 
 			<input id="active-tab-tags" type="radio" name="active-tab">
@@ -37,4 +61,11 @@
 			</div>
 		</form>
 	</div>
+	<script type="importmap">
+		{
+			"imports": {
+				"culori": "./node_modules/culori/bundled/culori.mjs"
+			}
+		}
+	</script>
 	<script type="module" src="dist/src/editor/main.js"></script>

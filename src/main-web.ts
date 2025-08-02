@@ -123,14 +123,11 @@ for (const segment of tiffEp.readImageSegments(rawIFD)) {
 		const ctx = canvas.getContext("2d")!;
 
 		const colorized = demosaic.demosaic(linearized[0], segment);
-
-
 		const whiteBalance = getWhiteBalance(6500);
 
 		const imageData = whiteBalance.rectangleToXYZ_D50_SRGB(colorized);
 
-		ctx.putImageData(imageData, 0, 0);
-
+		ctx.putImageData(imageData.toImageData(), 0, 0);
 
 		div.appendChild(canvas);
 	}

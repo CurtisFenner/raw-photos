@@ -167,9 +167,28 @@ export function readReals(
 	return out;
 }
 
+export type ImageSegment = {
+	x0: number;
+	x1: number;
+	y0: number;
+	y1: number;
+	offset: number;
+	byteCount: number;
+} | {
+	x0: number;
+	x1: number;
+	y0: number;
+	y1: number;
+	offset: number;
+	byteCount: number;
+	tileWidth: number[];
+	tileLength: number[];
+};
+
+
 export function readImageSegments(
 	ifd: ImageFileDirectory,
-) {
+): ImageSegment[] {
 	const imageWidth = readTag(ifd, TIFF6_TAG_VALUES.ImageWidth, readInts)![0];
 	const imageLength = readTag(ifd, TIFF6_TAG_VALUES.ImageLength, readInts)![0];
 

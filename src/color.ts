@@ -60,6 +60,27 @@ export class CameraRGBRect {
 			blue: this.data[i + 2],
 		};
 	}
+
+	toImageData(): ImageData {
+		const imageData = new ImageData(this.width, this.height, {
+			colorSpace: "srgb",
+		});
+		let o = 0;
+		let i = 0;
+		for (let r = 0; r < this.height; r++) {
+			for (let c = 0; c < this.width; c++) {
+				// TODO: Dither to increase color precision
+				imageData.data[o + 0] = 255 * this.data[i + 0];
+				imageData.data[o + 1] = 255 * this.data[i + 1];
+				imageData.data[o + 2] = 255 * this.data[i + 2];
+				imageData.data[o + 3] = 255;
+				o += 4;
+				i += 3;
+			}
+		}
+
+		return imageData;
+	}
 }
 
 export type LMS = {
@@ -391,10 +412,8 @@ export class WhiteBalance {
 		};
 	}
 
-	rectangleToXYZ_D50_SRGB(rawRGB: CameraRGBRect): ImageData {
-		const imageData = new ImageData(rawRGB.width, rawRGB.height, {
-			colorSpace: "srgb",
-		});
+	rectangleToXYZ_D50_SRGB(rawRGB: CameraRGBRect): CameraRGBRect {
+		const output = CameraRGBRect.allocate(rawRGB);
 
 		let i = 0;
 		let o = 0;
@@ -412,14 +431,13 @@ export class WhiteBalance {
 
 				// RGBA order
 				// TODO: dither to increase color precision
-				imageData.data[o + 0] = 255 * sRGB.r;
-				imageData.data[o + 1] = 255 * sRGB.g;
-				imageData.data[o + 2] = 255 * sRGB.b;
-				imageData.data[o + 3] = 255;
-				o += 4;
+				output.data[o + 0] = sRGB.r;
+				output.data[o + 1] = sRGB.g;
+				output.data[o + 2] = sRGB.b;
+				o += 3;
 			}
 		}
 
-		return imageData;
+		return output;
 	}
 }
