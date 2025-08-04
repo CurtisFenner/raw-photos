@@ -2,13 +2,13 @@ import { CameraRGBRect } from "../color.js";
 import * as dngLinearReference from "../dng-linear-reference.js";
 import * as dng from "../dng.js";
 import { AsShotNeutralWhiteBalanceFilter, Filter, ScaleFilter, TemperatureWhiteBalanceFilter, TransformXYZ_D50ToSRGB } from "../filter.js";
-import { Demosaic, NoDemosaic, RGGBMosaic } from "../mosaic.js";
+import { Demosaic, NoDemosaic, Pixelate, RGGBMosaic } from "../mosaic.js";
 import * as tiffEp from "../tiff-ep.js";
 import * as tiff6 from "../tiff6.js";
 import * as t from "./t.js";
 
 type PreviewSettings = {
-	demosaic: "rggb-linear" | "grayscale",
+	demosaic: "rggb-linear" | "grayscale" | "pixelate" | "pixelate-punch",
 	whiteBalance: {
 		mode: "temperature" | "as-shot-neutral" | "none",
 		useCC: boolean,
@@ -37,6 +37,15 @@ export function renderLinearizedSegmentCanvas(
 		demosaic = new RGGBMosaic(
 			new dng.ActiveAreaPattern(linearizer.activeArea, [[0, 1], [1, 2]])
 		);
+	} else if (previewSettings.demosaic === "pixelate" || previewSettings.demosaic === "pixelate-punch") {
+		const cfaDimensions: [1, number, number] = [
+			1,
+			...dng.readRealsTagExpectingSize(rawIFD, "CFARepeatPatternDim", 2 as const),
+		];
+		const pattern = new dng.ActiveAreaPattern(linearizer.activeArea,
+			dng.readRealRectangles(rawIFD, "CFAPattern", cfaDimensions)[0]
+		);
+		demosaic = new Pixelate(pattern, previewSettings.demosaic.includes("punch"));
 	} else {
 		demosaic = new NoDemosaic();
 	}
@@ -126,6 +135,10 @@ export async function renderImagePreview(
 		};
 		if (demosaicInput.value === "rggb-linear") {
 			previewSettings.demosaic = "rggb-linear";
+		} else if (demosaicInput.value === "pixelate") {
+			previewSettings.demosaic = "pixelate";
+		} else if (demosaicInput.value === "pixelate-punch") {
+			previewSettings.demosaic = "pixelate-punch";
 		}
 
 		const pauser = new t.Pauser(55)

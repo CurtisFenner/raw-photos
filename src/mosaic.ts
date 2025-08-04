@@ -29,6 +29,84 @@ export class NoDemosaic implements Demosaic {
 	}
 }
 
+export class Pixelate implements Demosaic {
+	constructor(
+		private readonly pattern: ActiveAreaPattern,
+		private punch: boolean,
+	) {
+	}
+
+	demosaic(linearized: number[][], topLeft: { x0: number; y0: number; }): CameraRGBRect {
+		const patternHeight = this.pattern.patternHeight;
+		const patternWidth = this.pattern.patternWidth;
+		if (linearized.length % patternHeight !== 0 || linearized[0].length % patternWidth !== 0) {
+			throw new Error("linearized dimensions must be a multiple of the CFAPattern size");
+		} else if ((topLeft.y0 - this.pattern.activeArea.activeAreaTop) % patternHeight !== 0) {
+			throw new Error("linearized must be aligned with CFAPattern size");
+		} else if ((topLeft.x0 - this.pattern.activeArea.activeAreaLeft) % patternWidth !== 0) {
+			throw new Error("linearized must be aligned with CFAPattern size");
+		}
+
+		console.log("this.pattern:", this.pattern);
+
+		const height = linearized.length;
+		const width = linearized[0].length;
+		const out = CameraRGBRect.allocate({ width, height });
+
+		for (let r = 0; r < height; r += patternHeight) {
+			for (let c = 0; c < width; c += patternWidth) {
+				let greenSum = 0;
+				let greenCount = 0;
+				let redSum = 0;
+				let redCount = 0;
+				let blueSum = 0;
+				let blueCount = 0;
+
+				for (let u = 0; u < patternHeight; u++) {
+					for (let v = 0; v < patternWidth; v++) {
+						const color = this.pattern.pattern[u][v];
+						const value = linearized[r + u][c + v];
+						if (color === 0) {
+							redCount += 1;
+							redSum += value;
+						} else if (color === 1) {
+							greenCount += 1;
+							greenSum += value;
+						} else if (color === 2) {
+							blueCount += 1;
+							blueSum += value;
+						}
+						// TODO: support non RGB color filter arrays...
+					}
+				}
+
+				for (let u = 0; u < patternHeight; u++) {
+					for (let v = 0; v < patternWidth; v++) {
+						const i = 3 * ((r + u) * width + c + v);
+						out.data[i + 0] = redSum / redCount;
+						out.data[i + 1] = greenSum / greenCount;
+						out.data[i + 2] = blueSum / blueCount;
+
+						if (this.punch) {
+							const color = this.pattern.pattern[u][v];
+							const value = linearized[r + u][c + v];
+							if (color === 0) {
+								out.data[i + 0] = value;
+							} else if (color === 1) {
+								out.data[i + 1] = value;
+							} else if (color === 2) {
+								out.data[i + 2] = value;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return out;
+	}
+}
+
 export class RGGBMosaic implements Demosaic {
 	constructor(
 		private readonly pattern: ActiveAreaPattern,

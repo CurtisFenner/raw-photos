@@ -398,7 +398,7 @@ export class ActiveAreaPattern {
 	public readonly patternHeight: number;
 	constructor(
 		public readonly activeArea: ActiveArea,
-		private pattern: number[][],
+		public readonly pattern: number[][],
 	) {
 		this.patternHeight = pattern.length;
 		this.patternWidth = pattern[0].length;
@@ -426,12 +426,12 @@ export const ALL_TAG_VALUES = {
 	...TIFF6_TAG_VALUES,
 };
 
-export function readRealsTagExpectingSize(
+export function readRealsTagExpectingSize<S extends number>(
 	ifd: tiffEp.ImageFileDirectory,
 	tagName: keyof typeof ALL_TAG_VALUES,
-	expectedSize: number,
+	expectedSize: S,
 	options?: { default?: number, requires?: (v: I32) => boolean },
-): I32[] {
+): S extends 2 ? [I32, I32] : I32[] {
 	const reals = tiffEp.readTag(ifd, ALL_TAG_VALUES[tagName], tiffEp.readReals);
 	if (reals === undefined) {
 		const def = options?.default;
@@ -443,7 +443,7 @@ export function readRealsTagExpectingSize(
 		for (let i = 0; i < expectedSize; i++) {
 			defs.push(def);
 		}
-		return defs;
+		return defs as S extends 2 ? [I32, I32] : I32[];
 	} else if (reals.length !== expectedSize) {
 		throw new DNGError(`${tagName} has invalid size ${reals.length}; expected ${expectedSize}`);
 	}
@@ -454,7 +454,7 @@ export function readRealsTagExpectingSize(
 			}
 		}
 	}
-	return reals;
+	return reals as S extends 2 ? [I32, I32] : I32[];
 }
 
 export function readRealRectangles<C extends number>(
