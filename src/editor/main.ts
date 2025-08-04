@@ -11,6 +11,7 @@ function markEditorLoading(
 	if (token !== t.latestRefresh.token) {
 		return;
 	}
+	t.editorDiv.classList.remove("file-error");
 	t.editorDiv.classList.add("file-loading");
 }
 
@@ -24,7 +25,6 @@ function reportError(token: unknown, err: unknown) {
 	const radio = document.getElementById("active-tab-tags") as HTMLInputElement;
 	radio.checked = true;
 
-	t.tabImageDiv.innerHTML = "";
 	t.tabTagsDiv.innerHTML = "";
 
 	const details = document.createElement("details");
