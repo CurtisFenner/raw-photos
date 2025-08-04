@@ -1,6 +1,7 @@
 import { CameraRGBRect } from "../color.js";
 import * as dngLinearReference from "../dng-linear-reference.js";
 import * as dng from "../dng.js";
+import { AsShotNeutralWhiteBalanceFilter, Filter, ScaleFilter, TemperatureWhiteBalanceFilter, TransformXYZ_D50ToSRGB } from "../filter.js";
 import { Demosaic, NoDemosaic, RGGBMosaic } from "../mosaic.js";
 import * as tiffEp from "../tiff-ep.js";
 import * as tiff6 from "../tiff6.js";
@@ -8,10 +9,16 @@ import * as t from "./t.js";
 
 type PreviewSettings = {
 	demosaic: "rggb-linear" | "grayscale",
+	whiteBalance: {
+		mode: "temperature" | "as-shot-neutral" | "none",
+		useCC: boolean,
+		tempK: number,
+	},
 };
 
 export function renderLinearizedSegmentCanvas(
 	previewSettings: PreviewSettings,
+	mainIFD: tiffEp.ImageFileDirectory,
 	rawIFD: tiffEp.ImageFileDirectory,
 	linearizer: dngLinearReference.Linearizer,
 	segment: tiffEp.ImageSegment,
@@ -33,9 +40,25 @@ export function renderLinearizedSegmentCanvas(
 	} else {
 		demosaic = new NoDemosaic();
 	}
-	let cameraRGB: CameraRGBRect = demosaic.demosaic(linearized, segment);
 
-	// TODO: If white-balance...
+	let image: CameraRGBRect = demosaic.demosaic(linearized, segment);
+	let imageSpace: "sRGB" | "XYZ_D50" = "sRGB";
+
+	let whiteBalanceFilter: Filter = new ScaleFilter({ r: 1, g: 1, b: 1 });
+	if (previewSettings.whiteBalance.mode === "as-shot-neutral") {
+		whiteBalanceFilter = new AsShotNeutralWhiteBalanceFilter(mainIFD);
+	} else if (previewSettings.whiteBalance.mode === "temperature") {
+		whiteBalanceFilter = new TemperatureWhiteBalanceFilter(mainIFD, previewSettings.whiteBalance);
+		imageSpace = "XYZ_D50";
+	}
+	image = whiteBalanceFilter.apply(image, segment);
+
+	if (imageSpace === "XYZ_D50") {
+		// Convert to sRGB
+		image = new TransformXYZ_D50ToSRGB().apply(image);
+		imageSpace = "sRGB";
+	}
+
 	const canvas = document.createElement("canvas");
 	canvas.width = segment.x1 - segment.x0;
 	canvas.height = segment.y1 - segment.y0;
@@ -43,7 +66,7 @@ export function renderLinearizedSegmentCanvas(
 	if (!ctx) {
 		throw new Error("your browser does nto support CanvasRenderingContext2D");
 	}
-	ctx.putImageData(cameraRGB.toImageData(), 0, 0);
+	ctx.putImageData(image.toImageData(), 0, 0);
 	return canvas;
 }
 
@@ -61,6 +84,7 @@ export async function renderImagePreview(
 	container.style.position = "relative";
 	t.imagePreviewDiv.appendChild(container);
 
+	const mainIFD = tiff.ifds[0];
 	const rawIFD = tiff.ifds.findLast(t.isIFDRaw)!;
 	const linearizer = new dngLinearReference.Linearizer(rawIFD);
 
@@ -72,13 +96,33 @@ export async function renderImagePreview(
 	let rerenderToken: unknown = null;
 
 	const demosaicInput = document.getElementById("menu-demosaic-select") as HTMLSelectElement;
+	const menuWhiteBalance = document.getElementById("menu-white-balance") as HTMLSelectElement;
+	const menuWhiteBalanceTemp = document.getElementById("menu-white-balance-temp") as HTMLSelectElement;
 
 	const changeOfSettings = async () => {
 		const renderToken = Symbol("rerender-" + String(token));
 		rerenderToken = renderToken;
 
+		let whiteBalanceMode;
+		if (menuWhiteBalance.value.includes("temperature")) {
+			whiteBalanceMode = "temperature" as const;
+		} else if (menuWhiteBalance.value === "none") {
+			whiteBalanceMode = "none" as const;
+		} else {
+			whiteBalanceMode = "as-shot-neutral" as const;
+		}
+		const whiteBalanceTempK = (
+			JSON.parse(menuWhiteBalanceTemp.value) as ["K", number]
+		)[1];
+		const whiteBalance = {
+			mode: whiteBalanceMode,
+			tempK: whiteBalanceTempK,
+			useCC: menuWhiteBalance.value.includes("use-cc"),
+		};
+
 		const previewSettings: PreviewSettings = {
 			demosaic: "grayscale",
+			whiteBalance,
 		};
 		if (demosaicInput.value === "rggb-linear") {
 			previewSettings.demosaic = "rggb-linear";
@@ -96,7 +140,7 @@ export async function renderImagePreview(
 				container.removeChild(existing);
 			}
 
-			const canvas = renderLinearizedSegmentCanvas(previewSettings, rawIFD, linearizer, segment);
+			const canvas = renderLinearizedSegmentCanvas(previewSettings, mainIFD, rawIFD, linearizer, segment);
 			container.getElementsByClassName(segmentClass)
 			canvas.style.position = "absolute";
 			canvas.style.top = segment.y0 + "px";
@@ -119,5 +163,7 @@ export async function renderImagePreview(
 	};
 
 	await changeOfSettingsWrapper();
-	demosaicInput.onchange = changeOfSettingsWrapper;
+	demosaicInput.addEventListener("change", changeOfSettingsWrapper);
+	menuWhiteBalance.addEventListener("change", changeOfSettingsWrapper);
+	menuWhiteBalanceTemp.addEventListener("change", changeOfSettingsWrapper);
 }

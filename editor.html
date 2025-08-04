@@ -30,7 +30,7 @@
 			<label for="active-tab-image">View image</label>
 			<div id="tab-image-div" class="tab">
 				<div style="display: flex; flex-direction: column;  position: absolute; left: 0; right: 0; top: 0; bottom: 0;">
-					<div id="image-menu-div" style="height: 3em; padding: 1em;">
+					<div id="image-menu-div" style="height: 3em; padding: 1em; flex-direction: row; display: flex; gap: 1em; align-items: center;">
 						<label>
 							Demosaic:
 							<select id="menu-demosaic-select">
@@ -43,10 +43,30 @@
 
 						<label>
 							White-Balance:
-							<select id="menu-demosaic-select">
+							<select id="menu-white-balance">
+								<option value="temperature-ignore-cc">Temperature (Ignore CameraCalibration)</option>
+								<option value="temperature-use-cc">Temperature (Use CameraCalibration)</option>
 								<option value="as-shot-neutral">AsShotNeutral (Camera Space)</option>
 								<option value="none">None (Camera Space)</option>
 							</select>
+						</label>
+
+						<label>
+							White-Balance Temperature:
+							<select id="menu-white-balance-temp">
+								<option value='["K", 2856]'>A: Tungsten Incandescent (2856 K)</option>
+								<option value='["K", 4230]'>F6: Cool white fluorescent (4230 K)</option>
+								<option value='["K", 5003]'>D50: Horizon sunlight (5003 K)</option>
+								<option value='["K", 5454]'>E: Equal energy (5454 K)</option>
+								<option value='["K", 6504]'>D65: Average daylight (6504 K)</option>
+							</select>
+							<script type="text/javascript">{
+								const menuWhiteBalance = document.getElementById("menu-white-balance");
+								const menuWhiteBalanceTemp = document.getElementById("menu-white-balance-temp");
+								menuWhiteBalance.addEventListener("change", () => {
+									menuWhiteBalanceTemp.disabled = !menuWhiteBalance.value.includes("temp");
+								});
+							}</script>
 						</label>
 					</div>
 					<div id="image-preview-div" class="hero-graph-paper" style="flex-grow: 1; padding: 1em; overflow: scroll;">
