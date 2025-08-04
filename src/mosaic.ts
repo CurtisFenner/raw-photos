@@ -7,7 +7,29 @@ export const CFA_COLORS = {
 	blue: new Set([2, 3, 4, 6]),
 };
 
-export class RGGBMosaic {
+export interface Demosaic {
+	demosaic(linearized: number[][], topLeft: { x0: number, y0: number }): CameraRGBRect;
+}
+
+export class NoDemosaic implements Demosaic {
+	demosaic(linearized: number[][]): CameraRGBRect {
+		const cameraRGB = CameraRGBRect.allocate({
+			width: linearized[0].length,
+			height: linearized.length,
+		});
+		for (let y = 0; y < linearized.length; y++) {
+			for (let x = 0; x < linearized[y].length; x++) {
+				const i = 3 * (y * linearized[0].length + x);
+				cameraRGB.data[i + 0] = linearized[y][x];
+				cameraRGB.data[i + 1] = linearized[y][x];
+				cameraRGB.data[i + 2] = linearized[y][x];
+			}
+		}
+		return cameraRGB;
+	}
+}
+
+export class RGGBMosaic implements Demosaic {
 	constructor(
 		private readonly pattern: ActiveAreaPattern,
 	) {

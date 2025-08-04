@@ -37,8 +37,9 @@ second byte is neither `0xFF` nor `0x00`.
 Each header contains parameters and possibly table entries associated with that
 marker. The actual pixel data exists in the "entropy coded data" segment.
 
-Note that frame headers _might_ contain markers, but entropy-coded data uses
-*byte stuffing* (see below) to ensure that they do not contain markers.
+Note that frame headers _might_ contain marker values, but entropy-coded data
+uses *byte stuffing* (see below) to ensure that they do not contain marker
+values.
 
 ## SOF_n (SOF3, etc) (Start of Frame) Header (from B.2.2)
 
