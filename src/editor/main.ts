@@ -25,7 +25,7 @@ function reportError(token: unknown, err: unknown) {
 	const radio = document.getElementById("active-tab-tags") as HTMLInputElement;
 	radio.checked = true;
 
-	t.tabTagsDiv.innerHTML = "";
+	// t.tabTagsDiv.innerHTML = "";
 
 	const details = document.createElement("details");
 	const summary = document.createElement("summary");

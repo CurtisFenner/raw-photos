@@ -246,4 +246,15 @@ export const STANDARD_ILLUMINANTS: Record<number, {
 			z: 108.883,
 		},
 	},
+	/** D50 */
+	23: {
+		temperatureK: 5003,
+		tri: {
+			// https://www.mathworks.com/help/images/ref/whitepoint.html
+			space: "XYZ",
+			x: 96.42,
+			y: 100,
+			z: 82.51,
+		},
+	},
 };

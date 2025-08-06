@@ -1,3 +1,4 @@
+import { BitStream } from "./data.js";
 import { ActiveArea, ActiveAreaPattern, DNGError, isPositive, readRealRectangles, readRealsTagExpectingSize } from "./dng.js";
 import * as jpeg from "./jpeg.js";
 import * as tiffEp from "./tiff-ep.js";
@@ -132,46 +133,76 @@ export class Linearizer {
 		rawIFD: tiffEp.ImageFileDirectory,
 		segment: { x0: number, y0: number, x1: number, y1: number, offset: number, byteCount: number },
 	): number[][][] {
-		const slice = rawIFD.scanner.getSlice(segment);
-		const jpegData = jpeg.decodeJPEG(slice);
+		const [compression] = readRealsTagExpectingSize(rawIFD, "Compression", 1);
 
-		const dataByComponent = jpegData.differences
-			.map(x => jpeg.applyLosslessPredictor(jpegData.sof3Header, jpegData.sosHeader, x));
-
-		const jpegComponentsSequential = [];
-		for (let y = 0; y < jpegData.sof3Header.lines; y++) {
-			for (let x = 0; x < jpegData.sof3Header.samplesPerLine; x++) {
-				for (let k = 0; k < jpegData.differences.length; k++) {
-					const n = dataByComponent[k][y][x];
-					jpegComponentsSequential.push(n);
-				}
+		const slice: Uint8Array = rawIFD.scanner.getSlice(segment);
+		if (compression === 1) {
+			// "Uncompressed data"
+			const [bits] = readRealsTagExpectingSize(rawIFD, "BitsPerSample", 1);
+			const [components] = readRealsTagExpectingSize(rawIFD, "SamplesPerPixel", 1);
+			if (components !== 1) {
+				throw new Error(`SamplesPerPixel = ${components} is not supported`);
+			} else if (bits > 16) {
+				throw new Error(`BitsPerSample = ${bits} is not supported (max 16)`);
 			}
-		}
 
-		const segmentWidth = segment.x1 - segment.x0;
-		const segmentHeight = segment.y1 - segment.y0;
-		const segmentArea = segmentWidth * segmentHeight;
-		if (segmentArea * this.componentCount !== jpegComponentsSequential.length) {
-			throw new DNGError(
-				`unexpected sequential size mismatch: ${segmentArea * this.componentCount} vs ${jpegComponentsSequential.length}`,
-			);
-		}
-		const shaped: number[][][] = [];
-		{
-			let i = 0;
-			for (let y = 0; y < segmentHeight; y++) {
-				for (let x = 0; x < segmentWidth; x++) {
-					for (let c = 0; c < this.componentCount; c++) {
-						shaped[c] = shaped[c] || [];
-						shaped[c][y] = shaped[c][y] || [];
-						shaped[c][y][x] = jpegComponentsSequential[i];
-						i += 1;
+			const stream = new BitStream(slice);
+			const pixelData = [];
+			for (let y = 0; y < segment.y1 - segment.y0; y++) {
+				const row: number[] = [];
+				for (let x = 0; x < segment.x1 - segment.x0; x++) {
+					const u16 = stream.peek16BigEndian();
+					row.push(u16 >> (16 - bits));
+					stream.advanceBits(bits);
+				}
+				pixelData.push(row);
+			}
+			return [pixelData];
+		} if (compression === 7) {
+			// (DNG v1.3): JPEG compressed data,
+			// either baseline DCT JPEG, or lossless JPEG compression.
+			const jpegData = jpeg.decodeJPEG(slice);
+
+			const dataByComponent = jpegData.differences
+				.map(x => jpeg.applyLosslessPredictor(jpegData.sof3Header, jpegData.sosHeader, x));
+
+			const jpegComponentsSequential = [];
+			for (let y = 0; y < jpegData.sof3Header.lines; y++) {
+				for (let x = 0; x < jpegData.sof3Header.samplesPerLine; x++) {
+					for (let k = 0; k < jpegData.differences.length; k++) {
+						const n = dataByComponent[k][y][x];
+						jpegComponentsSequential.push(n);
 					}
 				}
 			}
+
+			const segmentWidth = segment.x1 - segment.x0;
+			const segmentHeight = segment.y1 - segment.y0;
+			const segmentArea = segmentWidth * segmentHeight;
+			if (segmentArea * this.componentCount !== jpegComponentsSequential.length) {
+				throw new DNGError(
+					`unexpected sequential size mismatch: ${segmentArea * this.componentCount} vs ${jpegComponentsSequential.length}`,
+				);
+			}
+			const shaped: number[][][] = [];
+			{
+				let i = 0;
+				for (let y = 0; y < segmentHeight; y++) {
+					for (let x = 0; x < segmentWidth; x++) {
+						for (let c = 0; c < this.componentCount; c++) {
+							shaped[c] = shaped[c] || [];
+							shaped[c][y] = shaped[c][y] || [];
+							shaped[c][y][x] = jpegComponentsSequential[i];
+							i += 1;
+						}
+					}
+				}
+			}
+
+			return shaped;
 		}
 
-		return shaped;
+		throw new Error(`unsupported Compression type ${compression}`);
 	}
 
 	linearizeImageSegment(

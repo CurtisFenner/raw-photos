@@ -431,7 +431,7 @@ export function readRealsTagExpectingSize<S extends number>(
 	tagName: keyof typeof ALL_TAG_VALUES,
 	expectedSize: S,
 	options?: { default?: number, requires?: (v: I32) => boolean },
-): S extends 2 ? [I32, I32] : I32[] {
+): S extends 2 ? [I32, I32] : S extends 1 ? [I32] : I32[] {
 	const reals = tiffEp.readTag(ifd, ALL_TAG_VALUES[tagName], tiffEp.readReals);
 	if (reals === undefined) {
 		const def = options?.default;
@@ -443,7 +443,7 @@ export function readRealsTagExpectingSize<S extends number>(
 		for (let i = 0; i < expectedSize; i++) {
 			defs.push(def);
 		}
-		return defs as S extends 2 ? [I32, I32] : I32[];
+		return defs as S extends 2 ? [I32, I32] : S extends 1 ? [I32] : I32[];
 	} else if (reals.length !== expectedSize) {
 		throw new DNGError(`${tagName} has invalid size ${reals.length}; expected ${expectedSize}`);
 	}
@@ -454,7 +454,7 @@ export function readRealsTagExpectingSize<S extends number>(
 			}
 		}
 	}
-	return reals as S extends 2 ? [I32, I32] : I32[];
+	return reals as S extends 2 ? [I32, I32] : S extends 1 ? [I32] : I32[];
 }
 
 export function readRealRectangles<C extends number>(

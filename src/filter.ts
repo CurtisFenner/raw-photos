@@ -100,7 +100,6 @@ export class TemperatureWhiteBalanceFilter extends MatrixFilter {
 		}
 
 		const colorMatrix = weighted3x3("ColorMatrix1");
-		const forwardMatrix = weighted3x3("ForwardMatrix1");
 
 		const cameraCalibration = settings.useCC
 			? weighted3x3("CameraCalibration1")
@@ -153,21 +152,47 @@ export class TemperatureWhiteBalanceFilter extends MatrixFilter {
 			),
 		);
 
-		// From pg 103 of the DNG 1.7.1.0 spec:
-		// "If the ForwardMatrix tags are included in the camera profile"
-		// "CameraToXYZ_D50 = FM * D * Inverse (AB * CC)"
-		const cameraToXYZ_D50 = matrixMultiply(
-			matrixMultiply(
-				forwardMatrix,
-				cameraWhiteBalancing,
-			),
-			matrixInverse(
+
+		let forwardMatrix: number[][] | null;
+		try {
+			forwardMatrix = weighted3x3("ForwardMatrix1");
+		} catch (err) {
+			forwardMatrix = null;
+		}
+
+		let cameraToXYZ_D50: number[][];
+		if (forwardMatrix === null) {
+			// "If the ForwardMatrix tags are not included in the camera profile"
+			// CameraToXYZ = Inverse (XYZtoCamera)
+			// CameraToXYZ_D50 = CA * CameraToXYZ
+			// > CA, above, is a chromatic adaptation matrix that maps from the
+			// > white balance xy value to the D50 white point.
+			// > The recommended method for computing this chromatic adaptation
+			// > matrix is to use the linear Bradford algorithm
+
+			// TODO: Implement chromatic adaptation
+			const chromaticAdaptation = diagonalMatrix([1, 1, 1]);
+			cameraToXYZ_D50 = matrixMultiply(
+				chromaticAdaptation,
+				matrixInverse(xyzToCamera),
+			);
+		} else {
+			// From pg 103 of the DNG 1.7.1.0 spec:
+			// "If the ForwardMatrix tags are included in the camera profile"
+			// "CameraToXYZ_D50 = FM * D * Inverse (AB * CC)"
+			cameraToXYZ_D50 = matrixMultiply(
 				matrixMultiply(
-					diagonalMatrix(analogBalance),
-					cameraCalibration,
+					forwardMatrix,
+					cameraWhiteBalancing,
 				),
-			),
-		);
+				matrixInverse(
+					matrixMultiply(
+						diagonalMatrix(analogBalance),
+						cameraCalibration,
+					),
+				),
+			);
+		}
 
 		super(cameraToXYZ_D50);
 	}

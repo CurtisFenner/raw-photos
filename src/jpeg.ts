@@ -433,7 +433,7 @@ function stuffedEntropySlice(scanner: Scanner): U8[] {
 	return out;
 }
 
-export function decodeJPEG(jpeg: Uint8Array) {
+export function decodeJPEG(jpeg: Uint8Array): { differences: { id: number; diffRows: number[][]; dx: number; dy: number; }[]; sof3Header: SOF3Header; sosHeader: SOSHeader; } {
 	// This function supports only a very limited number of formats, which are
 	// the most likely to be used in a DNG.
 	// SOI*: 0xFF 0xD8
