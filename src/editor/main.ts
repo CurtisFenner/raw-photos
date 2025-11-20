@@ -3,10 +3,9 @@ import { renderImagePreview } from "./renderImagePreview.js";
 import { renderTags } from "./renderTags.js";
 import * as t from "./t.js";
 
-
 function markEditorLoading(
 	token: unknown,
-	loading: { fileName: string, sizeBytes: number },
+	loading: { fileName: string; sizeBytes: number }
 ) {
 	if (token !== t.latestRefresh.token) {
 		return;
@@ -22,7 +21,9 @@ function reportError(token: unknown, err: unknown) {
 	t.editorDiv.classList.remove("file-loading");
 	t.editorDiv.classList.add("file-error");
 
-	const radio = document.getElementById("active-tab-tags") as HTMLInputElement;
+	const radio = document.getElementById(
+		"active-tab-tags"
+	) as HTMLInputElement;
 	radio.checked = true;
 
 	// t.tabTagsDiv.innerHTML = "";
@@ -60,7 +61,7 @@ async function loadFile(token: unknown, file: File) {
 		}
 
 		await renderTags(token, tiff);
-		await renderImagePreview(token, tiff, err => {
+		await renderImagePreview(token, tiff, (err) => {
 			reportError(token, err);
 		});
 	} catch (e) {
@@ -75,6 +76,21 @@ export async function main() {
 		if (fileInput.files && fileInput.files[0]) {
 			const file = fileInput.files[0];
 			loadFile(Symbol(file.name), file);
+		}
+	});
+
+	document.body.addEventListener("dragover", (e) => {
+		// Allow drag-and-drop files onto the body.
+		e.preventDefault();
+	});
+
+	document.body.addEventListener("drop", (e) => {
+		e.preventDefault();
+
+		const dt = new DataTransfer();
+		if (e.dataTransfer?.files) {
+			fileInput.files = e.dataTransfer.files;
+			fileInput.dispatchEvent(new Event("change"));
 		}
 	});
 }
