@@ -1,19 +1,25 @@
 import { CameraRGBRect } from "../color.js";
 import * as dngLinearReference from "../dng-linear-reference.js";
 import * as dng from "../dng.js";
-import { AsShotNeutralWhiteBalanceFilter, Filter, ScaleFilter, TemperatureWhiteBalanceFilter, TransformXYZ_D50ToSRGB } from "../filter.js";
+import {
+	AsShotNeutralWhiteBalanceFilter,
+	Filter,
+	ScaleFilter,
+	TemperatureWhiteBalanceFilter,
+	TransformXYZ_D50ToSRGB,
+} from "../filter.js";
 import { Demosaic, NoDemosaic, Pixelate, RGGBMosaic } from "../mosaic.js";
 import * as tiffEp from "../tiff-ep.js";
 import * as tiff6 from "../tiff6.js";
 import * as t from "./t.js";
 
 type PreviewSettings = {
-	demosaic: "rggb-linear" | "grayscale" | "pixelate" | "pixelate-punch",
+	demosaic: "rggb-linear" | "grayscale" | "pixelate" | "pixelate-punch";
 	whiteBalance: {
-		mode: "temperature" | "as-shot-neutral" | "none",
-		useCC: boolean,
-		tempK: number,
-	},
+		mode: "temperature" | "as-shot-neutral" | "none";
+		useCC: boolean;
+		tempK: number;
+	};
 };
 
 export function renderLinearizedSegmentCanvas(
@@ -21,7 +27,7 @@ export function renderLinearizedSegmentCanvas(
 	mainIFD: tiffEp.ImageFileDirectory,
 	rawIFD: tiffEp.ImageFileDirectory,
 	linearizer: dngLinearReference.Linearizer,
-	segment: tiffEp.ImageSegment,
+	segment: tiffEp.ImageSegment
 ): HTMLCanvasElement {
 	const linearizedPlanes = linearizer.linearizeImageSegment(rawIFD, segment);
 	if (linearizedPlanes.length !== 1) {
@@ -35,17 +41,31 @@ export function renderLinearizedSegmentCanvas(
 	let demosaic: Demosaic;
 	if (previewSettings.demosaic === "rggb-linear") {
 		demosaic = new RGGBMosaic(
-			new dng.ActiveAreaPattern(linearizer.activeArea, [[0, 1], [1, 2]])
+			new dng.ActiveAreaPattern(linearizer.activeArea, [
+				[0, 1],
+				[1, 2],
+			])
 		);
-	} else if (previewSettings.demosaic === "pixelate" || previewSettings.demosaic === "pixelate-punch") {
+	} else if (
+		previewSettings.demosaic === "pixelate" ||
+		previewSettings.demosaic === "pixelate-punch"
+	) {
 		const cfaDimensions: [1, number, number] = [
 			1,
-			...dng.readRealsTagExpectingSize(rawIFD, "CFARepeatPatternDim", 2 as const),
+			...dng.readRealsTagExpectingSize(
+				rawIFD,
+				"CFARepeatPatternDim",
+				2 as const
+			),
 		];
-		const pattern = new dng.ActiveAreaPattern(linearizer.activeArea,
+		const pattern = new dng.ActiveAreaPattern(
+			linearizer.activeArea,
 			dng.readRealRectangles(rawIFD, "CFAPattern", cfaDimensions)[0]
 		);
-		demosaic = new Pixelate(pattern, previewSettings.demosaic.includes("punch"));
+		demosaic = new Pixelate(
+			pattern,
+			previewSettings.demosaic.includes("punch")
+		);
 	} else {
 		demosaic = new NoDemosaic();
 	}
@@ -57,7 +77,10 @@ export function renderLinearizedSegmentCanvas(
 	if (previewSettings.whiteBalance.mode === "as-shot-neutral") {
 		whiteBalanceFilter = new AsShotNeutralWhiteBalanceFilter(mainIFD);
 	} else if (previewSettings.whiteBalance.mode === "temperature") {
-		whiteBalanceFilter = new TemperatureWhiteBalanceFilter(mainIFD, previewSettings.whiteBalance);
+		whiteBalanceFilter = new TemperatureWhiteBalanceFilter(
+			mainIFD,
+			previewSettings.whiteBalance
+		);
 		imageSpace = "XYZ_D50";
 	}
 	image = whiteBalanceFilter.apply(image, segment);
@@ -73,7 +96,9 @@ export function renderLinearizedSegmentCanvas(
 	canvas.height = segment.y1 - segment.y0;
 	const ctx = canvas.getContext("2d");
 	if (!ctx) {
-		throw new Error("your browser does nto support CanvasRenderingContext2D");
+		throw new Error(
+			"your browser does nto support CanvasRenderingContext2D"
+		);
 	}
 	ctx.putImageData(image.toImageData(), 0, 0);
 	return canvas;
@@ -82,7 +107,7 @@ export function renderLinearizedSegmentCanvas(
 export async function renderImagePreview(
 	token: unknown,
 	tiff: t.TIFF,
-	reportError: (err: unknown) => void,
+	reportError: (err: unknown) => void
 ) {
 	if (token !== t.latestRefresh.token) {
 		return;
@@ -97,16 +122,30 @@ export async function renderImagePreview(
 	const rawIFD = tiff.ifds.findLast(t.isIFDRaw)!;
 	const linearizer = new dngLinearReference.Linearizer(rawIFD);
 
-	const imageWidth = tiffEp.readTag(rawIFD, tiff6.TIFF6_TAG_VALUES.ImageWidth, tiffEp.readInts)![0];
-	const imageHeight = tiffEp.readTag(rawIFD, tiff6.TIFF6_TAG_VALUES.ImageLength, tiffEp.readInts)![0];
+	const imageWidth = tiffEp.readTag(
+		rawIFD,
+		tiff6.TIFF6_TAG_VALUES.ImageWidth,
+		tiffEp.readInts
+	)![0];
+	const imageHeight = tiffEp.readTag(
+		rawIFD,
+		tiff6.TIFF6_TAG_VALUES.ImageLength,
+		tiffEp.readInts
+	)![0];
 	container.style.width = `${imageWidth.toFixed(0)}px`;
 	container.style.height = `${imageHeight.toFixed(0)}px`;
 
 	let rerenderToken: unknown = null;
 
-	const demosaicInput = document.getElementById("menu-demosaic-select") as HTMLSelectElement;
-	const menuWhiteBalance = document.getElementById("menu-white-balance") as HTMLSelectElement;
-	const menuWhiteBalanceTemp = document.getElementById("menu-white-balance-temp") as HTMLSelectElement;
+	const demosaicInput = document.getElementById(
+		"menu-demosaic-select"
+	) as HTMLSelectElement;
+	const menuWhiteBalance = document.getElementById(
+		"menu-white-balance"
+	) as HTMLSelectElement;
+	const menuWhiteBalanceTemp = document.getElementById(
+		"menu-white-balance-temp"
+	) as HTMLSelectElement;
 
 	const changeOfSettings = async () => {
 		const renderToken = Symbol("rerender-" + String(token));
@@ -141,20 +180,37 @@ export async function renderImagePreview(
 			previewSettings.demosaic = "pixelate-punch";
 		}
 
-		const pauser = new t.Pauser(55)
-		for (const segment of tiffEp.readImageSegments(rawIFD)) {
+		const pauser = new t.Pauser(55);
+		const originalSegments = tiffEp.readImageSegments(rawIFD);
+		const splitSegments = originalSegments.flatMap((segment) =>
+			tiffEp.splitLargeSegment(rawIFD, segment, {
+				maximumArea: 320 * 320,
+			})
+		);
+		for (const segment of splitSegments) {
 			await pauser.pause();
-			if (token !== t.latestRefresh.token || rerenderToken !== renderToken) {
+			if (
+				token !== t.latestRefresh.token ||
+				rerenderToken !== renderToken
+			) {
 				return;
 			}
 
 			const segmentClass = `segment-x${segment.x0}-y${segment.y0}`;
-			for (const existing of container.getElementsByClassName(segmentClass)) {
+			for (const existing of container.getElementsByClassName(
+				segmentClass
+			)) {
 				container.removeChild(existing);
 			}
 
-			const canvas = renderLinearizedSegmentCanvas(previewSettings, mainIFD, rawIFD, linearizer, segment);
-			container.getElementsByClassName(segmentClass)
+			const canvas = renderLinearizedSegmentCanvas(
+				previewSettings,
+				mainIFD,
+				rawIFD,
+				linearizer,
+				segment
+			);
+			container.getElementsByClassName(segmentClass);
 			canvas.style.position = "absolute";
 			canvas.style.top = segment.y0 + "px";
 			canvas.style.imageRendering = "pixelated";
