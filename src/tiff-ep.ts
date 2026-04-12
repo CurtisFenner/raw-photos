@@ -56,14 +56,14 @@ export const TIFF_EP_TAG_VALUES = Object.fromEntries(
 		return [value.name, parseInt(key)];
 	})
 ) as any as {
-	[K in keyof typeof TIFF_EP_TAGS as (typeof TIFF_EP_TAGS)[K]["name"]]: K;
-};
+		[K in keyof typeof TIFF_EP_TAGS as (typeof TIFF_EP_TAGS)[K]["name"]]: K;
+	};
 
 export const FIELD_TYPES: Record<
 	number,
 	(typeof FIELD_INT_TYPES & typeof FIELD_OTHER_TYPES)[
-		| keyof typeof FIELD_INT_TYPES
-		| keyof typeof FIELD_OTHER_TYPES]
+	| keyof typeof FIELD_INT_TYPES
+	| keyof typeof FIELD_OTHER_TYPES]
 > = {
 	...FIELD_INT_TYPES,
 	...FIELD_OTHER_TYPES,
@@ -178,23 +178,23 @@ export function readReals(
 
 export type ImageSegment =
 	| {
-			x0: number;
-			x1: number;
-			y0: number;
-			y1: number;
-			offset: number;
-			byteCount: number;
-	  }
+		x0: number;
+		x1: number;
+		y0: number;
+		y1: number;
+		offset: number;
+		byteCount: number;
+	}
 	| {
-			x0: number;
-			x1: number;
-			y0: number;
-			y1: number;
-			offset: number;
-			byteCount: number;
-			tileWidth: number[];
-			tileLength: number[];
-	  };
+		x0: number;
+		x1: number;
+		y0: number;
+		y1: number;
+		offset: number;
+		byteCount: number;
+		tileWidth: number[];
+		tileLength: number[];
+	};
 
 export function splitLargeSegment(
 	ifd: ImageFileDirectory,
@@ -366,12 +366,16 @@ export function parseTIFF_EP(
 	}
 ) {
 	if (file.length > 2 ** 32) {
-		throw new Error(
-			"parseTIFF_EP: does not support files larger than 4 GiB"
-		);
+		throw new Error("parseTIFF_EP: does not support files larger than 4 GiB");
+	} else if (file.length < 128) {
+		throw new Error("parseTIFF_EP: does not support files less than 128 bytes");
 	}
 
-	const problems = [];
+	const problems: string[] = [];
+	const report = (message: string): void => {
+		problems.push(message);
+		console.error("parseTIFF_EP:", message);
+	};
 
 	const scanner = new Scanner(file);
 
@@ -383,19 +387,19 @@ export function parseTIFF_EP(
 		scanner.byteOrder = "big-endian";
 	} else {
 		const fallback = options?.fallbackByteOrder || "little-endian";
-		problems.push(
+		report(
 			`invalid BOM at offset 0: ${bom0} ${bom1}:` +
-				`\n\texpected little-endian ${0x49} ${0x49}` +
-				`\n\tor big-endian ${0x4d} ${0x4d}` +
-				`\nFalling back to ${fallback}`
+			`\n\texpected little-endian ${0x49} ${0x49}` +
+			`\n\tor big-endian ${0x4d} ${0x4d}` +
+			`\nFalling back to ${fallback}`
 		);
 		scanner.byteOrder = fallback;
 	}
 
 	const tiffMarker = scanner.u16();
 	if (tiffMarker !== 42) {
-		problems.push(
-			`unexpected TIFF version at offset 2: ${tiffMarker} (expected 42)`
+		report(
+			`unexpected TIFF version at offset 2: ${tiffMarker} (expected 42)`,
 		);
 	}
 
@@ -433,7 +437,7 @@ export function parseTIFF_EP(
 	}
 
 	if (ifds.length > 100) {
-		problems.push("too many IFDs!");
+		report("too many IFDs!");
 	}
 
 	return {

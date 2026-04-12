@@ -32,8 +32,22 @@ export class Scanner {
 		this.dataView = new DataView(cloned.buffer);
 	}
 
-	getSlice(slice: { offset: number, byteCount: number }) {
+	getSlice(slice: { offset: number, byteCount: number }): Uint8Array {
 		return new Uint8Array(this.dataView.buffer, slice.offset, slice.byteCount);
+	}
+
+	bytes(length: number): Uint8Array {
+		if (this.offset + length > this.dataView.byteLength) {
+			throw new ScannerError(`bytes: length ${length} out of bounds`);
+		}
+		const slice = this.getSlice({ offset: this.offset, byteCount: length });
+		this.offset += length;
+		return slice;
+	}
+
+	utf8(byteCount: number): string {
+		const bytes = this.bytes(byteCount);
+		return new TextDecoder().decode(bytes).replace(/\0*$/, "");
 	}
 
 	u8(): U8 {

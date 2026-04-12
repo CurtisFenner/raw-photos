@@ -1,3 +1,4 @@
+import { decodeFujifilmRAF } from "../fujifilm-raw.js";
 import * as tiffEp from "../tiff-ep.js";
 import { renderImagePreview } from "./renderImagePreview.js";
 import { renderTags } from "./renderTags.js";
@@ -51,9 +52,15 @@ async function loadFile(token: unknown, file: File) {
 	});
 
 	try {
-		const fileBytes = await file.arrayBuffer();
+		const fileBytes = new Uint8Array(await file.arrayBuffer());
 
-		const tiff = tiffEp.parseTIFF_EP(new Uint8Array(fileBytes));
+		try {
+			const raf = decodeFujifilmRAF(fileBytes);
+		} catch (rafErr) {
+			console.error("rafErr:", rafErr);
+		}
+
+		const tiff = tiffEp.parseTIFF_EP(fileBytes);
 
 		const rawIFD = tiff.ifds.findLast(t.isIFDRaw)!;
 		if (!rawIFD) {
@@ -87,7 +94,6 @@ export async function main() {
 	document.body.addEventListener("drop", (e) => {
 		e.preventDefault();
 
-		const dt = new DataTransfer();
 		if (e.dataTransfer?.files) {
 			fileInput.files = e.dataTransfer.files;
 			fileInput.dispatchEvent(new Event("change"));
