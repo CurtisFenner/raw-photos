@@ -5,10 +5,6 @@
 		"serve": "npx http-server"
 	},
 	"dependencies": {
-		"@types/culori": "^4.0.1",
-		"culori": "^4.0.2"
-	},
-	"devDependencies": {
-		"@types/node": "^22.19.17"
+		"@types/node": "^26.6.3"
 	}
 }
