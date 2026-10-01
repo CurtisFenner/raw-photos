@@ -6,5 +6,6 @@
 		"module": "esnext",
 		"sourceMap": true,
 		"skipLibCheck": true,
+		"types": ["node"]
 	}
 }

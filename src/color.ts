@@ -1,18 +1,13 @@
-import * as culori from "culori";
-import { matrixInverse, matrixMultiply, diagonalMatrix as matrixWithDiagonal } from "./data.js";
-import * as dng from "./dng.js";
-import { ImageFileDirectory } from "./tiff-ep.js";
-
 export type XYZ = {
 	space: "XYZ",
-	x: number,
-	y: number,
-	z: number,
+	X: number,
+	Y: number,
+	Z: number,
 };
 
 export type Oklab = {
 	space: "oklab",
-	l: number,
+	L: number,
 	a: number,
 	b: number,
 };
@@ -99,33 +94,33 @@ export type LMS = {
 export function standardObserver1964(wavelengthNm: number): XYZ {
 	return {
 		space: "XYZ",
-		x: 0.398 * Math.exp(-1250 * Math.log((wavelengthNm + 570.01) / 1014) ** 2)
+		X: 0.398 * Math.exp(-1250 * Math.log((wavelengthNm + 570.01) / 1014) ** 2)
 			+ 1.132 * Math.exp(-234 * Math.log((1338 - wavelengthNm) / 743.5) ** 2),
-		y: 1.011 * Math.exp(-0.5 * ((wavelengthNm - 556.1) / 46.14) ** 2),
-		z: 2.060 * Math.exp(-32 * Math.log((wavelengthNm - 265.8) / 180.4) ** 2),
+		Y: 1.011 * Math.exp(-0.5 * ((wavelengthNm - 556.1) / 46.14) ** 2),
+		Z: 2.060 * Math.exp(-32 * Math.log((wavelengthNm - 265.8) / 180.4) ** 2),
 	};
 }
 
 /**
  * https://bottosson.github.io/posts/oklab/
  *
- * Oklab uses the D64 whitepoint (also used by sRGB).
+ * Oklab uses the D65 whitepoint (also used by sRGB).
  */
 export function convertXYZ(xyz: XYZ) {
 	const lms: LMS = {
 		space: "lms",
 		l:
-			xyz.x * 0.8189330101
-			+ xyz.y * 0.3618667424
-			+ xyz.z * -0.1288597137,
+			xyz.X * 0.8189330101
+			+ xyz.Y * 0.3618667424
+			+ xyz.Z * -0.1288597137,
 		m:
-			xyz.x * 0.0329845436
-			+ xyz.y * 0.9293118715
-			+ xyz.z * 0.0361456387,
+			xyz.X * 0.0329845436
+			+ xyz.Y * 0.9293118715
+			+ xyz.Z * 0.0361456387,
 		s:
-			xyz.x * 0.0482003018
-			+ xyz.y * 0.2643662691
-			+ xyz.z * 0.6338517070,
+			xyz.X * 0.0482003018
+			+ xyz.Y * 0.2643662691
+			+ xyz.Z * 0.6338517070,
 	};
 
 	const lms2 = {
@@ -136,7 +131,7 @@ export function convertXYZ(xyz: XYZ) {
 
 	const oklab: Oklab = {
 		space: "oklab",
-		l:
+		L:
 			lms2.l * +0.2104542553
 			+ lms2.m * +0.7936177850
 			+ lms2.s * -0.0040720468,
@@ -189,9 +184,9 @@ export function daylightXYZ(temperatureK: number, luminance: number): XYZ {
 	// Z = z * (X+Y+Z)
 	return {
 		space: "XYZ",
-		x: luminance * x / y,
-		y: luminance,
-		z: luminance * z / y,
+		X: luminance * x / y,
+		Y: luminance,
+		Z: luminance * z / y,
 	};
 }
 
@@ -200,7 +195,7 @@ export function daylightXYZ(temperatureK: number, luminance: number): XYZ {
  * 0: Unknown
  * 1: Daylight
  * 2: Fluorescent
- * 3: Tungesten (Incandescent)
+ * 3: Tungsten (Incandescent)
  * 4: Flash
  * 9: Fine Weather
  * 10: Cloudy
@@ -217,7 +212,7 @@ export function daylightXYZ(temperatureK: number, luminance: number): XYZ {
  * 21: D65
  * 22: D75
  * 23: D50
- * 24: ISO Studio Tungesten
+ * 24: ISO Studio Tungsten
  * 255: Other
  */
 export const STANDARD_ILLUMINANTS: Record<number, {
@@ -231,9 +226,9 @@ export const STANDARD_ILLUMINANTS: Record<number, {
 		temperatureK: 2856,
 		tri: {
 			space: "XYZ",
-			x: 109.85,
-			y: 100,
-			z: 35.58,
+			X: 109.85,
+			Y: 100,
+			Z: 35.58,
 		},
 	},
 	/** D65. */
@@ -241,9 +236,9 @@ export const STANDARD_ILLUMINANTS: Record<number, {
 		temperatureK: 6504,
 		tri: {
 			space: "XYZ",
-			x: 95.047,
-			y: 100,
-			z: 108.883,
+			X: 95.047,
+			Y: 100,
+			Z: 108.883,
 		},
 	},
 	/** D50 */
@@ -252,9 +247,141 @@ export const STANDARD_ILLUMINANTS: Record<number, {
 		tri: {
 			// https://www.mathworks.com/help/images/ref/whitepoint.html
 			space: "XYZ",
-			x: 96.42,
-			y: 100,
-			z: 82.51,
+			X: 96.42,
+			Y: 100,
+			Z: 82.51,
 		},
 	},
 };
+
+/**
+ * Converts from CIE xyY to XYZ.
+ *
+ * This is a simple relabeling and is independent of the particular curves
+ * (1931 vs 1964, 2-deg vs 10-deg, etc)
+ */
+export function fromChromaticity(p: {
+	x: number,
+	y: number,
+	Y?: number,
+}): Readonly<{
+	/** x chromaticity, defined as x = X / (X+Y+Z). */
+	x: number,
+	/** y chromaticity, defined as y = Y / (X+Y+Z). */
+	y: number,
+	X: number,
+	Y: number,
+	Z: number,
+}> {
+	const Y = p.Y ?? 1;
+	return Object.freeze({
+		x: p.x,
+		y: p.y,
+		X: p.x * Y / p.y,
+		Y,
+		Z: (1 - p.x - p.y) * Y / p.y,
+	});
+}
+
+/**
+ * The Rec-709 chromaticities for red, green, and blue phosphors in displays.
+ * This standard is incorporated into the sRGB specification.
+ *
+ * Given in CIE 1931 2-degree xyY.
+ *
+ * The `white`-point corresponds to (roughly) D65.
+ *
+ * The `red`, `green`, and `blue` primaries are scaled (by their `Y` components)
+ * so that they add to form the `white` (+-0.0095%)
+ *
+ * @see https://www.itu.int/rec/R-REC-BT.709-5-200204-S/en
+ */
+export const rec709Primaries = Object.freeze({
+	/**
+	 * The chromaticity of grays:
+	 * when the red, green, and blue channels have equal values.
+	 */
+	white: fromChromaticity({
+		x: 0.3127,
+		y: 0.3290,
+		Y: 1,
+	}),
+	red: fromChromaticity({
+		x: 0.640,
+		y: 0.330,
+		Y: 0.2126,
+	}),
+	green: fromChromaticity({
+		x: 0.300,
+		y: 0.600,
+		Y: 0.7152,
+	}),
+	blue: fromChromaticity({
+		x: 0.150,
+		y: 0.060,
+		Y: 0.0722,
+	}),
+});
+
+/**
+ * Approximate gamma mapping of sRGB, using the v^2.2 approximation.
+ */
+export function srgbLinearToMapped(v: number): number {
+	return Math.pow(Math.max(0, v), 1 / 2.2);
+}
+
+/**
+ * Approximate inverse gamma mapping of sRGB, using the v^2.2 approximation.
+ */
+export function srgbLinearToMappedInverse(v: number): number {
+	return Math.pow(Math.max(0, v), 2.2);
+}
+
+/**
+ * A 3x3 row-major matrix. `M*[R;G;B]` will compute `[X;Y;Z]`.
+ */
+export const linear_sRGB_to_XYZ = Object.freeze([
+	rec709Primaries.red.X,
+	rec709Primaries.green.X,
+	rec709Primaries.blue.X,
+	rec709Primaries.red.Y,
+	rec709Primaries.green.Y,
+	rec709Primaries.blue.Y,
+	rec709Primaries.red.Z,
+	rec709Primaries.green.Z,
+	rec709Primaries.blue.Z,
+]);
+
+// Manually inverted:
+export const xyz_to_linear_sRGB = Object.freeze([
+	+3.24156, -1.53767, -0.49870,
+	-0.96920, +1.87589, +0.04155,
+	+0.05562, -0.20396, +1.05686,
+]);
+
+// http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
+export const xyz_D50_to_linear_sRGB = Object.freeze([
+	3.1338561, -1.6168667, -0.4906146,
+	-0.9787684, 1.9161415, 0.0334540,
+	0.0719453, -0.2289914, 1.4052427,
+]);
+
+/**
+ * @param a a `?`x`d` matrix
+ * @param b a `d`x`?` matrix
+ */
+export function mat3Multiply(a: readonly number[], d: number, b: readonly number[]): number[] {
+	const m = [];
+	const mr = a.length / d;
+	const mc = b.length / d;
+	for (let r = 0; r < mr; r++) {
+		for (let c = 0; c < mc; c++) {
+			let s = 0;
+			for (let k = 0; k < d; k++) {
+				s += a[r * d + k] * b[mc * k + c];
+			}
+			m.push(s);
+		}
+	}
+	return m;
+}

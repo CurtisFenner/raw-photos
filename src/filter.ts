@@ -1,8 +1,7 @@
-import { CameraRGBRect, daylightXYZ, STANDARD_ILLUMINANTS } from "./color.js";
+import { CameraRGBRect, daylightXYZ, linear_sRGB_to_XYZ, mat3Multiply, srgbLinearToMappedInverse, STANDARD_ILLUMINANTS, xyz_D50_to_linear_sRGB, xyz_to_linear_sRGB } from "./color.js";
 import { diagonalMatrix, matrixInverse, matrixMultiply } from "./data.js";
 import { ALL_TAG_VALUES, readRealRectangles, readRealsTagExpectingSize } from "./dng.js";
 import { ImageFileDirectory } from "./tiff-ep.js";
-import * as culori from "culori";
 
 export interface Filter {
 	apply(input: CameraRGBRect, topLeft: { x0: number, y0: number }): CameraRGBRect;
@@ -124,9 +123,9 @@ export class TemperatureWhiteBalanceFilter extends MatrixFilter {
 		const cameraNeutral = matrixMultiply(
 			xyzToCamera,
 			[
-				[xyzNeutral.x],
-				[xyzNeutral.y],
-				[xyzNeutral.z],
+				[xyzNeutral.X],
+				[xyzNeutral.Y],
+				[xyzNeutral.Z],
 			],
 		);
 
@@ -151,7 +150,6 @@ export class TemperatureWhiteBalanceFilter extends MatrixFilter {
 				],
 			),
 		);
-
 
 		let forwardMatrix: number[][] | null;
 		try {
@@ -200,6 +198,27 @@ export class TemperatureWhiteBalanceFilter extends MatrixFilter {
 
 export class TransformXYZ_D50ToSRGB extends ColorFilter {
 	override transform(r: number, g: number, b: number): RGB {
-		return culori.convertXyz50ToRgb({ x: r, y: g, z: b });
+		// TODO: NEEDS D50 SCALING!!!
+		// 0.9642, 1.0000, 0.8251
+		return to_sRGB({ X: r, Y: g, Z: b });
 	}
 }
+
+const inputs = [
+	[1, 1, 1],
+	[0.5, 0.5, 0.5],
+	[0.2577, 0.1851, 0.8543] /* --> 0.39, 0.40, 0.95 */,
+	// [0.3, 0.2, 0.1],
+	// [0.1, 0.2, 0.3],
+] as const;
+
+function to_sRGB(xyz: { X: number, Y: number, Z: number }) {
+	const [xr, xg, xb] = mat3Multiply(xyz_D50_to_linear_sRGB, 3, [xyz.X, xyz.Y, xyz.Z]); //
+	const gamma = (x: number) => x ** (1 / 2.2);
+	return {
+		r: gamma(xr),
+		g: gamma(xg),
+		b: gamma(xb),
+	};
+}
+
