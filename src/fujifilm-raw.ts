@@ -1,7 +1,15 @@
 import { Scanner, U16 } from "./data.js";
 import { FileFormatDetectionError } from "./errs.js";
+import { parseTIFF_EP, readInts, readTag, scanIFD } from "./tiff-ep.js";
 
 export const FUJI_MAGIC_STRING = "FUJIFILMCCD-RAW 0201";
+
+export const FUJIFILM_TIFF_TAGS = {
+	61448: {
+		name: "FF_pixelData",
+		type: "???",
+	},
+};
 
 // https://libopenraw.freedesktop.org/formats/raf/
 export function decodeFujifilmRAF(file: Uint8Array) {
@@ -23,6 +31,26 @@ export function decodeFujifilmRAF(file: Uint8Array) {
 
 	scanner.offset = offsetDirectory.metaContainer.offset;
 	const metaContainer = decodeMetaContainer(scanner);
+
+	scanner.offset = offsetDirectory.cfa.offset;
+	const tiffBytes = scanner.bytes(offsetDirectory.cfa.length);
+
+	try {
+		console.log("parsing tiff...");
+		const parsed = parseTIFF_EP(tiffBytes);
+		console.log(parsed);
+		const dataIfdOffset = readTag(parsed.ifds[0], 0xF000, readInts);
+		if (!dataIfdOffset || !dataIfdOffset[0]) {
+			throw new FileFormatDetectionError("failed to find tag `0xF000` in IFD 0 of TIFF");
+		}
+		console.log({ offsetDirectory, dataIfdOffset });
+		parsed.scanner.offset = dataIfdOffset[0];
+		const ifd = scanIFD(parsed.scanner, 0);
+		console.log(ifd);
+	} catch (err) {
+		throw new Error(`failed to read TIFF from ${JSON.stringify(offsetDirectory.cfa)}`, { cause: err });
+	}
+
 	console.log({ metaContainer });
 }
 

@@ -39,6 +39,8 @@ export const FIELD_INT_TYPES = {
 	6: { name: "I8", bytes: 1, int: true },
 	8: { name: "I16", bytes: 2, int: true },
 	9: { name: "I32", bytes: 4, int: true },
+	/** Apparently not documented in TIFF 6 */
+	13: { name: "I32", bytes: 4, int: true, ifd: true },
 } as const;
 
 export const TIFF_EP_TAGS = {

@@ -101,3 +101,13 @@ therefore read / updated independently.
 > a complete JPEG data stream that is valid according to the ISO JPEG standard
 > (ISO IEC 10918-1). TIFF/EP requires that readers only support the DCT based
 > lossy JPEG process.
+
+# Additional
+
+Field type `13` is not documented in the TIFF 6.
+
+Per libtiff, type 13 it is a 32-bit unsigned offset to a nested IFD:
+https://gitlab.com/libtiff/libtiff/-/blob/e263ea349015b411eddbe37960fc40762f4b73bb/libtiff/tiff.h#L160
+
+It seems that Fujifilm uses tag `61440` (`0xF000`) with type `13` to point to
+the actual image data.
