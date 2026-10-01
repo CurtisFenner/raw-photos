@@ -1,4 +1,6 @@
 dist/
 node_modules/
-*.dng
 **/.DS_Store
+
+*.dng
+*.RAF
